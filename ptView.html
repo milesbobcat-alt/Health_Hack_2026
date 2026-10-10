@@ -594,6 +594,59 @@
         color: #ffffff;
       }
 
+      main {
+        width: min(100% - 2rem, 52rem);
+        margin-inline: auto;
+        padding-block: 2rem;
+      }
+
+      .patient-card {
+        display: grid;
+        gap: 1rem;
+        padding: 1.5rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background-color: var(--surface);
+      }
+
+      .patient-card h1,
+      .patient-card p {
+        margin: 0;
+      }
+
+      .tabs,
+      .playback-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+
+      [role="tab"] {
+        background: var(--surface);
+        color: var(--link);
+      }
+
+      [role="tabpanel"] {
+        padding-block: 1rem;
+      }
+
+      #patient-data {
+        width: 100%;
+        min-height: 15rem;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .patient-status {
+        min-height: 1.5em;
+        color: var(--muted-text);
+      }
+
+      .patient-status[data-state="error"] {
+        color: var(--error);
+      }
+
       @media (prefers-reduced-motion: reduce) {
         *,
         *::before,
@@ -649,12 +702,12 @@
         <section class="patient-section avs-section" aria-labelledby="avs-heading">
           <h2 id="avs-heading">After-visit summary (AVS)</h2>
           <p class="section-description">Select a sentence to hear it read aloud or view a simpler explanation.</p>
+          <p id="load-status" class="patient-status" role="status" aria-live="polite">Loading your discharge information…</p>
           <div id="avs-transcript" class="avs-transcript" tabindex="0" aria-describedby="transcript-note">
-            <p>Take your medication as directed by your care team.</p>
-            <p>Keep your follow-up appointment as scheduled.</p>
-            <p>Contact your care team if you have questions about your recovery.</p>
+            <p>Your discharge instructions will appear here.</p>
           </div>
-          <p id="transcript-note" class="transcript-note">Example transcript preview. Your AVS transcript will be imported here when the data pipeline is connected.</p>
+          <p id="transcript-note" class="transcript-note">Select text to hear it read aloud or view a simpler explanation.</p>
+          <a id="pdf-link" class="button" target="_blank" rel="noopener noreferrer" hidden>View or download discharge PDF</a>
         </section>
       </div>
 
@@ -675,7 +728,7 @@
 
           <div class="speech-controls">
             <p id="speech-privacy-note" class="speech-note">
-              Approved text is sent to ElevenLabs for speech.
+              Approved text is sent to ElevenLabs to generate audio.
             </p>
 
             <label for="speech-approval">
@@ -684,7 +737,7 @@
             </label>
 
             <div class="speech-buttons">
-              <button id="read-aloud" type="button">Read aloud</button>
+              <button id="read-aloud" type="button" disabled>Play Out Loud</button>
               <button id="stop-reading" type="button" disabled>Stop reading</button>
             </div>
 
@@ -720,13 +773,15 @@
       (() => {
         const patientData = document.querySelector("#patient-data");
         const approval = document.querySelector("#speech-approval");
+        const loadStatus = document.querySelector("#load-status");
+        const pdfLink = document.querySelector("#pdf-link");
         const readButton = document.querySelector("#read-aloud");
         const stopButton = document.querySelector("#stop-reading");
         const status = document.querySelector("#speech-status");
         const audioPlayer = document.querySelector("#patient-audio");
         const checklistTabs = [...document.querySelectorAll(".checklist-tabs [role='tab']")];
         const checklistItems = document.querySelector("#checklist-items");
-        const transcript = document.querySelector("#avs-transcript");
+        const transcriptElement = document.querySelector("#avs-transcript");
         const selectionTools = document.querySelector("#selection-tools");
         const readSelectionButton = document.querySelector("#read-selection");
         const simplifySelectionButton = document.querySelector("#simplify-selection");
@@ -740,9 +795,16 @@
         let activeCategory = "medications";
         let audioUrl = null;
         let selectedTranscriptText = "";
+        let transcript = "";
 
-        function setStatus(message) {
+        function setStatus(message, state = "idle") {
           status.textContent = message;
+          status.dataset.state = state;
+        }
+
+        function setLoadStatus(message, state = "idle") {
+          loadStatus.textContent = message;
+          loadStatus.dataset.state = state;
         }
 
         function showChecklistCategory(category) {
@@ -814,14 +876,14 @@
         function updateSelectionTools() {
           const selection = window.getSelection();
           const selectedText = selection?.toString().trim() || "";
-          if (!selection || !selectedText || !transcript.contains(selection.anchorNode)) {
+          if (!selection || !selectedText || !transcriptElement.contains(selection.anchorNode)) {
             selectionTools.hidden = true;
             selectedTranscriptText = "";
             return;
           }
 
           const range = selection.getRangeAt(0);
-          if (!transcript.contains(range.endContainer)) {
+          if (!transcriptElement.contains(range.endContainer)) {
             selectionTools.hidden = true;
             selectedTranscriptText = "";
             return;
@@ -857,21 +919,63 @@
           audioPlayer.load();
         }
 
+        async function loadDischarge() {
+          const dischargeId = new URLSearchParams(window.location.search).get("id");
+          if (!dischargeId) {
+            setLoadStatus("This patient link is missing its discharge ID.", "error");
+            return;
+          }
+
+          try {
+            const response = await fetch(`/api/discharge/${encodeURIComponent(dischargeId)}`);
+            const result = await response.json();
+            if (!response.ok) {
+              throw new Error(result.error || "Discharge information could not be loaded.");
+            }
+
+            transcript = typeof result.transcript === "string" ? result.transcript : "";
+            const paragraphs = transcript
+              ? transcript.split(/\n+/).filter(Boolean).map((line) => {
+                const paragraph = document.createElement("p");
+                paragraph.textContent = line;
+                return paragraph;
+              })
+              : [Object.assign(document.createElement("p"), {
+                textContent: "No transcript was provided.",
+              })];
+            transcriptElement.replaceChildren(...paragraphs);
+            patientData.value = transcript;
+
+            if (result.pdfUrl) {
+              pdfLink.href = result.pdfUrl;
+              pdfLink.download = result.pdfOriginalName || "discharge.pdf";
+              pdfLink.textContent = `View or download ${result.pdfOriginalName || "discharge PDF"}`;
+              pdfLink.hidden = false;
+            }
+            setLoadStatus("Your discharge information is ready.");
+            readButton.disabled = !transcript || !approval.checked;
+          } catch (error) {
+            setLoadStatus(error instanceof TypeError
+              ? "Could not connect to the discharge server. Check your connection and refresh this page."
+              : error.message || "Discharge information could not be loaded.", "error");
+          }
+        }
+
         function stopReading() {
           audioPlayer.pause();
           audioPlayer.currentTime = 0;
           stopButton.disabled = true;
-          readButton.disabled = false;
+          readButton.disabled = !transcript || !approval.checked;
         }
 
         async function readTextAloud(text) {
           text = text.trim();
           if (!text) {
-            setStatus("There is no text to read aloud.");
+            setStatus("There is no text to read aloud.", "error");
             return;
           }
           if (!approval.checked) {
-            setStatus("Confirm that your organization approves sending this text to ElevenLabs.");
+            setStatus("Confirm that your organization approves sending this text to ElevenLabs.", "error");
             approval.focus();
             return;
           }
@@ -884,9 +988,6 @@
 
           try {
             const speechEndpoint = new URL("/api/speak", window.location.origin);
-            if (window.location.port === "5500") {
-              speechEndpoint.port = "3000";
-            }
             const response = await fetch(speechEndpoint, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -914,24 +1015,25 @@
               await audioPlayer.play();
               setStatus("Playing generated audio.");
             } catch {
-              readButton.disabled = false;
-              readSelectionButton.disabled = false;
+              readButton.disabled = !transcript || !approval.checked;
+              readSelectionButton.disabled = !approval.checked;
               setStatus("Audio is ready. Press Play on the audio player to listen.");
             }
           } catch (error) {
             setStatus(
               error instanceof TypeError
-                ? "Could not reach the speech server. Open this page from the running local server and try again."
-                : error.message,
+                ? "Could not reach the speech server. Open this page from the running application and try again."
+                : error.message || "Speech generation failed. Please try again.",
+              "error",
             );
-            readButton.disabled = false;
-            readSelectionButton.disabled = false;
+            readButton.disabled = !transcript || !approval.checked;
+            readSelectionButton.disabled = !approval.checked;
           }
         }
 
         readButton.addEventListener("click", () => {
           if (!patientData.value.trim()) {
-            setStatus("There is no care suggestion to read aloud.");
+            setStatus("There is no care suggestion to read aloud.", "error");
             patientData.focus();
             return;
           }
@@ -949,8 +1051,8 @@
         });
         selectionTools.addEventListener("mousedown", (event) => event.preventDefault());
         document.addEventListener("selectionchange", updateSelectionTools);
-        transcript.addEventListener("pointerup", updateSelectionTools);
-        transcript.addEventListener("keyup", updateSelectionTools);
+        transcriptElement.addEventListener("pointerup", updateSelectionTools);
+        transcriptElement.addEventListener("keyup", updateSelectionTools);
         window.addEventListener("resize", () => {
           if (!selectionTools.hidden) updateSelectionTools();
         });
@@ -963,6 +1065,11 @@
           setStatus("Playback stopped.");
         });
 
+        approval.addEventListener("change", () => {
+          readButton.disabled = !transcript || !approval.checked;
+          readSelectionButton.disabled = !approval.checked;
+        });
+
         audioPlayer.addEventListener("play", () => {
           readButton.disabled = true;
           readSelectionButton.disabled = true;
@@ -973,19 +1080,23 @@
         audioPlayer.addEventListener("pause", () => {
           if (!audioPlayer.ended) {
             stopButton.disabled = true;
-            readButton.disabled = false;
-            readSelectionButton.disabled = false;
+            readButton.disabled = !transcript || !approval.checked;
+            readSelectionButton.disabled = !approval.checked;
           }
         });
 
         audioPlayer.addEventListener("ended", () => {
           stopButton.disabled = true;
-          readButton.disabled = false;
-          readSelectionButton.disabled = false;
+          readButton.disabled = !transcript || !approval.checked;
+          readSelectionButton.disabled = !approval.checked;
           setStatus("Playback finished.");
         });
 
-        window.addEventListener("pagehide", clearAudioUrl);
+        window.addEventListener("pagehide", () => {
+          audioPlayer.pause();
+          clearAudioUrl();
+        });
+        void loadDischarge();
       })();
     </script>
   </body>
