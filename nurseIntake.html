@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Add Care Instructions</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Open Sans", Arial, sans-serif;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        --page-background: #f2f2f2;
+        --surface: #ffffff;
+        --text: #1f1f1f;
+        --muted-text: #595959;
+        --placeholder: #737373;
+        --link: #3834a8;
+        --visited-link: #9a5ba5;
+        --accent: #db0084;
+        --accent-action: #b0006a;
+        --border: #767676;
+        --disabled-background: #e0e0e0;
+        --disabled-text: #595959;
+        --focus: #a00060;
+        --error: #b20000;
+      }
+
+      :root[data-theme="beige"] {
+        --page-background: #f5f0e6;
+        --surface: #fffdf8;
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --page-background: #1f1f1f;
+        --surface: #292929;
+        --text: #f5f5f5;
+        --muted-text: #d0d0d0;
+        --placeholder: #c2c2c2;
+        --link: #d478ff;
+        --visited-link: #e6a6ff;
+        --accent: #db0084;
+        --accent-action: #b0006a;
+        --border: #b8b8b8;
+        --disabled-background: #454545;
+        --disabled-text: #d0d0d0;
+        --focus: #ff83ca;
+        --error: #ff8585;
+      }
+
+      html {
+        min-height: 100%;
+        font-size: 100%;
+        background-color: var(--page-background);
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        background-color: var(--page-background);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 1.25rem;
+        font-weight: 400;
+        line-height: 1.5;
+        letter-spacing: 0.01em;
+        word-spacing: 0.08em;
+        text-align: left;
+      }
+
+      h1,
+      h2 {
+        color: var(--text);
+        font-weight: 600;
+        line-height: 1.35;
+        text-align: left;
+      }
+
+      p {
+        max-width: 70ch;
+        margin-block: 0 1em;
+      }
+
+      :focus-visible {
+        outline: 3px dashed var(--focus);
+        outline-offset: 3px;
+      }
+
+      button,
+      textarea {
+        color: var(--text);
+        font: inherit;
+      }
+
+      button {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 1rem 1.5rem;
+        border: 2px solid var(--link);
+        border-radius: 3px;
+        background-color: var(--link);
+        color: #ffffff;
+        cursor: pointer;
+        text-align: center;
+      }
+
+      button:disabled {
+        border-color: var(--disabled-background);
+        background-color: var(--disabled-background);
+        color: var(--disabled-text);
+        cursor: not-allowed;
+      }
+
+      textarea {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 14rem;
+        padding: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background-color: var(--surface);
+        resize: vertical;
+      }
+
+      textarea:focus {
+        border: 2px solid var(--link);
+      }
+
+      textarea::placeholder {
+        color: var(--placeholder);
+        opacity: 1;
+      }
+
+      textarea:focus::placeholder {
+        color: transparent;
+      }
+
+      @media (hover: hover) {
+        button:not(:disabled):hover {
+          border-color: var(--accent-action);
+          background-color: var(--accent-action);
+        }
+      }
+
+      .page-header {
+        border-bottom: 1px solid var(--border);
+        background-color: var(--surface);
+      }
+
+      .header-content,
+      main {
+        width: min(100% - 3rem, 72rem);
+        margin-inline: auto;
+      }
+
+      .header-content {
+        display: flex;
+        min-height: 4.5rem;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+
+      .workspace-label {
+        margin: 0;
+        color: var(--link);
+        font-weight: 600;
+      }
+
+      .role-label {
+        margin: 0;
+        color: var(--muted-text);
+        font-size: 1rem;
+      }
+
+      main {
+        padding-block: 3rem;
+      }
+
+      .intro {
+        margin-bottom: 2rem;
+      }
+
+      .intro h1 {
+        margin-block: 0 0.5rem;
+        font-size: 2rem;
+      }
+
+      .intro p,
+      .card-description,
+      .privacy-note {
+        color: var(--muted-text);
+      }
+
+      .source-options {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1.5rem;
+        align-items: stretch;
+      }
+
+      .source-card {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        min-width: 0;
+        padding: 1.5rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background-color: var(--surface);
+      }
+
+      .source-card h2 {
+        margin: 0;
+        font-size: 1.35rem;
+      }
+
+      .card-description {
+        margin: 0;
+      }
+
+      .recording-placeholder {
+        display: grid;
+        flex: 1;
+        min-height: 14rem;
+        place-content: center;
+        justify-items: center;
+        gap: 1rem;
+        padding: 1.5rem;
+        border: 2px dashed var(--border);
+        border-radius: 3px;
+        text-align: center;
+      }
+
+      .recording-placeholder p {
+        margin: 0;
+        color: var(--muted-text);
+      }
+
+      .coming-soon {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        color: var(--muted-text);
+        font-size: 1rem;
+        font-weight: 600;
+      }
+
+      .text-entry {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .text-entry label {
+        font-weight: 600;
+      }
+
+      .privacy-note {
+        margin-top: 1.5rem;
+        font-size: 1rem;
+      }
+
+      @media (max-width: 48rem) {
+        .header-content,
+        main {
+          width: min(100% - 2rem, 72rem);
+        }
+
+        main {
+          padding-block: 2rem;
+        }
+
+        .source-options {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="header-content">
+        <p class="workspace-label">Care instructions</p>
+        <p class="role-label">RN workspace</p>
+      </div>
+    </header>
+
+    <main>
+      <section class="intro" aria-labelledby="page-title">
+        <h1 id="page-title">Add care instructions</h1>
+        <p>Record spoken instructions or paste text from the electronic medical record.</p>
+      </section>
+
+      <div class="source-options">
+        <section class="source-card" aria-labelledby="record-heading">
+          <h2 id="record-heading">Record audio</h2>
+          <p class="card-description">Speak the care instructions you want to add.</p>
+          <div class="recording-placeholder">
+            <span class="coming-soon">Coming soon</span>
+            <p>Audio recording is not available yet. No audio will be captured.</p>
+            <button type="button" disabled>Start recording</button>
+          </div>
+        </section>
+
+        <section class="source-card" aria-labelledby="paste-heading">
+          <h2 id="paste-heading">Paste from the EMR</h2>
+          <p class="card-description">Copy and paste instructions into the text area.</p>
+          <div class="text-entry">
+            <label for="emr-text">Care instructions</label>
+            <textarea id="emr-text" name="emr-text" rows="8" placeholder="Example discharge instruction text"></textarea>
+          </div>
+        </section>
+      </div>
+
+      <p class="privacy-note">This prototype does not submit or save pasted text.</p>
+    </main>
+  </body>
+</html>
