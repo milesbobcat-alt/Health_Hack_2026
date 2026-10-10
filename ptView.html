@@ -261,5 +261,175 @@
     </style>
   </head>
   <body>
+    <main>
+      <section aria-labelledby="patient-information-heading">
+        <h1 id="patient-information-heading">Patient information</h1>
+        <p>Transferred patient information will appear below. Review it before listening.</p>
+
+        <label for="patient-data">Patient information</label>
+        <textarea
+          id="patient-data"
+          name="patient-data"
+          rows="12"
+          maxlength="5000"
+          aria-describedby="speech-privacy-note"
+          placeholder="Patient information will appear here"
+        ></textarea>
+
+        <p id="speech-privacy-note">
+          Read aloud sends this text to the configured ElevenLabs account to generate audio.
+          Use this only if your organization has approved sending this information to that service.
+        </p>
+
+        <label for="speech-approval">
+          <input id="speech-approval" type="checkbox">
+          I confirm this text is approved for processing by ElevenLabs.
+        </label>
+
+        <div>
+          <button id="read-aloud" type="button">Read aloud</button>
+          <button id="stop-reading" type="button" disabled>Stop reading</button>
+        </div>
+
+        <p id="speech-status" role="status" aria-live="polite"></p>
+        <audio id="patient-audio" controls preload="none" hidden></audio>
+      </section>
+    </main>
+
+    <script>
+      (() => {
+        const patientData = document.querySelector("#patient-data");
+        const approval = document.querySelector("#speech-approval");
+        const readButton = document.querySelector("#read-aloud");
+        const stopButton = document.querySelector("#stop-reading");
+        const status = document.querySelector("#speech-status");
+        const audioPlayer = document.querySelector("#patient-audio");
+        let audioUrl = null;
+
+        function setStatus(message) {
+          status.textContent = message;
+        }
+
+        function getSpeechErrorMessage(result) {
+          const providerMessages = {
+            400: "ElevenLabs could not process this request. Check the selected voice and speech model.",
+            401: "ElevenLabs rejected the API key. Check ELEVENLABS_API_KEY in the server's environment, then restart the server.",
+            402: "The ElevenLabs account needs an active plan or additional credits for text-to-speech.",
+            403: "The ElevenLabs API key does not have permission to use text-to-speech.",
+            404: "The configured ElevenLabs voice was not found. Check ELEVENLABS_VOICE_ID.",
+            422: "ElevenLabs could not use this text, voice, or model combination. Check the voice ID and model settings.",
+            429: "The ElevenLabs account has reached a rate or usage limit. Check your plan and try again later.",
+          };
+
+          if (providerMessages[result.providerStatus]) {
+            return `${providerMessages[result.providerStatus]} (Provider status: ${result.providerStatus})`;
+          }
+
+          return result.error || "Speech generation failed. Please try again.";
+        }
+
+        function clearAudioUrl() {
+          if (audioUrl) {
+            URL.revokeObjectURL(audioUrl);
+            audioUrl = null;
+          }
+          audioPlayer.removeAttribute("src");
+          audioPlayer.hidden = true;
+          audioPlayer.load();
+        }
+
+        function stopReading() {
+          audioPlayer.pause();
+          audioPlayer.currentTime = 0;
+          stopButton.disabled = true;
+          readButton.disabled = false;
+        }
+
+        readButton.addEventListener("click", async () => {
+          const text = patientData.value.trim();
+          if (!text) {
+            setStatus("There is no patient information to read aloud.");
+            patientData.focus();
+            return;
+          }
+          if (!approval.checked) {
+            setStatus("Confirm that your organization approves sending this text to ElevenLabs.");
+            approval.focus();
+            return;
+          }
+
+          clearAudioUrl();
+          readButton.disabled = true;
+          stopButton.disabled = true;
+          setStatus("Generating audio. Please wait.");
+
+          try {
+            const response = await fetch("/api/speak", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text }),
+            });
+
+            if (!response.ok) {
+              let result;
+              try {
+                result = await response.json();
+              } catch {
+                throw new Error("The server returned an invalid response.");
+              }
+              throw new Error(getSpeechErrorMessage(result));
+            }
+
+            const audio = await response.blob();
+            if (!audio.size) {
+              throw new Error("The speech service returned empty audio.");
+            }
+            audioUrl = URL.createObjectURL(audio);
+            audioPlayer.src = audioUrl;
+            audioPlayer.hidden = false;
+            try {
+              await audioPlayer.play();
+              setStatus("Playing generated audio.");
+            } catch {
+              readButton.disabled = false;
+              setStatus("Audio is ready. Press Play on the audio player to listen.");
+            }
+          } catch (error) {
+            setStatus(
+              error instanceof TypeError
+                ? "Could not reach the speech server. Open this page from the running local server and try again."
+                : error.message,
+            );
+            readButton.disabled = false;
+          }
+        });
+
+        stopButton.addEventListener("click", () => {
+          stopReading();
+          setStatus("Playback stopped.");
+        });
+
+        audioPlayer.addEventListener("play", () => {
+          readButton.disabled = true;
+          stopButton.disabled = false;
+          setStatus("Playing generated audio.");
+        });
+
+        audioPlayer.addEventListener("pause", () => {
+          if (!audioPlayer.ended) {
+            stopButton.disabled = true;
+            readButton.disabled = false;
+          }
+        });
+
+        audioPlayer.addEventListener("ended", () => {
+          stopButton.disabled = true;
+          readButton.disabled = false;
+          setStatus("Playback finished.");
+        });
+
+        window.addEventListener("pagehide", clearAudioUrl);
+      })();
+    </script>
   </body>
 </html>

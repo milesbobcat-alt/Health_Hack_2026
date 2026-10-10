@@ -6,7 +6,9 @@ import { pathToFileURL } from "node:url";
 
 const projectDirectory = import.meta.dirname;
 const defaultMaxAudioBytes = 25 * 1024 * 1024;
+const maxSpeechTextCharacters = 5000;
 const transcriptionUrl = "https://api.elevenlabs.io/v1/speech-to-text";
+const speechUrl = "https://api.elevenlabs.io/v1/text-to-speech";
 
 function sendJson(response, statusCode, body) {
   response.writeHead(statusCode, {
@@ -46,18 +48,57 @@ async function readAudio(request, maxAudioBytes) {
   return { audio: Buffer.concat(chunks, totalBytes) };
 }
 
+async function readJson(request, maxBytes) {
+  const contentLength = Number(request.headers["content-length"]);
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    return { error: "Request body exceeds the configured size limit.", statusCode: 413 };
+  }
+
+  const chunks = [];
+  let totalBytes = 0;
+  let tooLarge = false;
+  for await (const chunk of request) {
+    totalBytes += chunk.length;
+    if (totalBytes > maxBytes && !tooLarge) {
+      tooLarge = true;
+      chunks.length = 0;
+    }
+    if (!tooLarge) chunks.push(chunk);
+  }
+
+  if (tooLarge) {
+    return { error: "Request body exceeds the configured size limit.", statusCode: 413 };
+  }
+  if (totalBytes === 0) {
+    return { error: "Request body must contain JSON.", statusCode: 400 };
+  }
+
+  try {
+    return { value: JSON.parse(Buffer.concat(chunks, totalBytes).toString("utf8")) };
+  } catch {
+    return { error: "Request body must contain valid JSON.", statusCode: 400 };
+  }
+}
+
 export function createAppServer({
   apiKey = process.env.ELEVENLABS_API_KEY,
   modelId = process.env.ELEVENLABS_MODEL_ID || "scribe_v2_medical",
+  speechModelId = process.env.ELEVENLABS_TTS_MODEL_ID || "eleven_multilingual_v2",
+  voiceId = process.env.ELEVENLABS_VOICE_ID,
   fetchImpl = fetch,
   maxAudioBytes = defaultMaxAudioBytes,
 } = {}) {
   return createHttpServer(async (request, response) => {
     const url = new URL(request.url, "http://localhost");
 
-    if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/nurseIntake.html")) {
+    const pageFiles = {
+      "/": "nurseIntake.html",
+      "/nurseIntake.html": "nurseIntake.html",
+      "/ptView.html": "ptView.html",
+    };
+    if (request.method === "GET" && pageFiles[url.pathname]) {
       try {
-        const pagePath = resolve(projectDirectory, "nurseIntake.html");
+        const pagePath = resolve(projectDirectory, pageFiles[url.pathname]);
         const pageInfo = await stat(pagePath);
         response.writeHead(200, {
           "Cache-Control": "no-store",
@@ -68,6 +109,90 @@ export function createAppServer({
         createReadStream(pagePath).pipe(response);
       } catch {
         sendJson(response, 500, { error: "The nurse intake page could not be loaded." });
+      }
+      return;
+    }
+
+    if (url.pathname === "/api/speak") {
+      if (request.method !== "POST") {
+        response.setHeader("Allow", "POST");
+        sendJson(response, 405, { error: "Use POST to generate speech." });
+        return;
+      }
+
+      if (!apiKey || !voiceId) {
+        sendJson(response, 503, {
+          error: "Speech generation is not configured on the server.",
+        });
+        return;
+      }
+
+      const contentType = request.headers["content-type"] || "";
+      if (!contentType.toLowerCase().startsWith("application/json")) {
+        sendJson(response, 415, { error: "Send the text as application/json." });
+        return;
+      }
+
+      const bodyResult = await readJson(request, maxSpeechTextCharacters * 4);
+      if (bodyResult.error) {
+        sendJson(response, bodyResult.statusCode, { error: bodyResult.error });
+        return;
+      }
+
+      const text = bodyResult.value?.text;
+      if (typeof text !== "string" || !text.trim()) {
+        sendJson(response, 400, { error: "Provide non-empty patient text to read aloud." });
+        return;
+      }
+      if (text.length > maxSpeechTextCharacters) {
+        sendJson(response, 413, {
+          error: `Text must be ${maxSpeechTextCharacters} characters or fewer.`,
+        });
+        return;
+      }
+
+      let providerResponse;
+      try {
+        providerResponse = await fetchImpl(
+          `${speechUrl}/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "xi-api-key": apiKey,
+            },
+            body: JSON.stringify({ text: text.trim(), model_id: speechModelId }),
+            signal: AbortSignal.timeout(60_000),
+          },
+        );
+      } catch {
+        sendJson(response, 502, { error: "The speech generation service could not be reached." });
+        return;
+      }
+
+      if (!providerResponse.ok) {
+        sendJson(response, 502, {
+          error: "The speech generation service rejected the text.",
+          providerStatus: providerResponse.status,
+        });
+        return;
+      }
+
+      try {
+        const audio = Buffer.from(await providerResponse.arrayBuffer());
+        if (audio.length === 0) {
+          sendJson(response, 502, { error: "The speech generation service returned empty audio." });
+          return;
+        }
+        response.writeHead(200, {
+          "Cache-Control": "no-store",
+          "Content-Length": audio.length,
+          "Content-Type": "audio/mpeg",
+          "X-Content-Type-Options": "nosniff",
+        });
+        response.end(audio);
+      } catch {
+        sendJson(response, 502, { error: "The speech generation service returned invalid audio." });
       }
       return;
     }

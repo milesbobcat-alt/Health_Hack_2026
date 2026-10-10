@@ -134,6 +134,49 @@
         color: var(--error);
       }
 
+      input[type="file"] {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 3rem;
+        padding: 0.5rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background-color: var(--surface);
+        color: var(--text);
+        font: inherit;
+      }
+
+      input[type="file"]::file-selector-button {
+        min-height: 2.5rem;
+        margin-right: 0.75rem;
+        padding: 0.4rem 0.75rem;
+        border: 1px solid var(--link);
+        border-radius: 3px;
+        background-color: var(--surface);
+        color: var(--link);
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .pdf-card {
+        grid-column: 1 / -1;
+      }
+
+      .pdf-attachment {
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .pdf-status {
+        min-height: 1.5em;
+        margin: 0;
+        color: var(--muted-text);
+      }
+
+      .pdf-status[data-state="error"] {
+        color: var(--error);
+      }
+
       textarea {
         box-sizing: border-box;
         width: 100%;
@@ -347,10 +390,27 @@
 
         <section class="source-card" aria-labelledby="paste-heading">
           <h2 id="paste-heading">Paste from the EMR</h2>
-          <p class="card-description">Copy and paste instructions into the text area.</p>
+          <p class="card-description">Copy/paste instructions into the text area.</p>
           <div class="text-entry">
             <label for="emr-text">Care instructions</label>
             <textarea id="emr-text" name="emr-text" rows="8" placeholder="Example discharge instruction text"></textarea>
+          </div>
+        </section>
+
+        <section class="source-card pdf-card" aria-labelledby="pdf-heading">
+          <h2 id="pdf-heading">Attach a PDF</h2>
+          <p id="pdf-help" class="card-description">Choose one PDF file to attach to this page.</p>
+          <div class="pdf-attachment">
+            <label for="pdf-file">PDF document</label>
+            <input
+              id="pdf-file"
+              name="pdf-file"
+              type="file"
+              accept=".pdf,application/pdf"
+              aria-describedby="pdf-help pdf-status"
+            >
+            <p id="pdf-status" class="pdf-status" role="status" aria-live="polite" data-state="idle"></p>
+            <button id="remove-pdf" type="button" hidden>Remove PDF</button>
           </div>
         </section>
       </div>
@@ -359,6 +419,7 @@
         <p>Audio is sent to ElevenLabs for transcription. This app does not save recordings.</p>
         <p>Only record information approved for your organization's privacy requirements, and review the transcript for accuracy.</p>
         <p>Pasted text remains in this page and is not submitted.</p>
+        <p>A selected PDF remains in this page only; it is not uploaded or saved.</p>
       </div>
     </main>
     <script>
@@ -368,12 +429,47 @@
         const stopButton = document.querySelector("#stop-recording");
         const transcriptField = document.querySelector("#emr-text");
         const status = document.querySelector("#recording-status");
+        const pdfInput = document.querySelector("#pdf-file");
+        const pdfStatus = document.querySelector("#pdf-status");
+        const removePdfButton = document.querySelector("#remove-pdf");
 
         let mediaRecorder = null;
         let audioChunks = [];
         let recordingSize = 0;
         let recordingTooLarge = false;
         let microphoneStream = null;
+
+        function setPdfStatus(message, state = "idle") {
+          pdfStatus.textContent = message;
+          pdfStatus.dataset.state = state;
+        }
+
+        pdfInput.addEventListener("change", () => {
+          const [file] = pdfInput.files;
+          if (!file) {
+            removePdfButton.hidden = true;
+            setPdfStatus("");
+            return;
+          }
+
+          if (!file.name.toLowerCase().endsWith(".pdf")
+            || (file.type && file.type !== "application/pdf")) {
+            pdfInput.value = "";
+            removePdfButton.hidden = true;
+            setPdfStatus("Choose a PDF document to attach.", "error");
+            return;
+          }
+
+          removePdfButton.hidden = false;
+          setPdfStatus(`${file.name} selected. It has not been uploaded.`);
+        });
+
+        removePdfButton.addEventListener("click", () => {
+          pdfInput.value = "";
+          removePdfButton.hidden = true;
+          setPdfStatus("PDF removed.");
+          pdfInput.focus();
+        });
 
         function setStatus(message, state = "idle") {
           status.textContent = message;

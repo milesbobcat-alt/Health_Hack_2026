@@ -126,6 +126,88 @@ test("serves the intake page from the root path", async () => {
   assert.match(page, /\/api\/transcribe/);
 });
 
+test("serves the patient view page with read-aloud controls", async () => {
+  const { url } = await startServer();
+  const response = await fetch(`${url}/ptView.html`);
+
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /id="patient-data"/);
+});
+
+test("generates speech through ElevenLabs and returns audio", async () => {
+  let submittedUrl;
+  let submittedOptions;
+  const { url } = await startServer({
+    apiKey: "test-api-key",
+    voiceId: "test-voice",
+    speechModelId: "eleven_multilingual_v2",
+    fetchImpl: async (requestUrl, options) => {
+      submittedUrl = requestUrl;
+      submittedOptions = options;
+      return new Response(Buffer.from("fake mp3"), {
+        headers: { "Content-Type": "audio/mpeg" },
+      });
+    },
+  });
+
+  const response = await fetch(`${url}/api/speak`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: "Please take your medicine with food." }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "audio/mpeg");
+  assert.equal(await response.text(), "fake mp3");
+  assert.equal(
+    submittedUrl,
+    "https://api.elevenlabs.io/v1/text-to-speech/test-voice?output_format=mp3_44100_128",
+  );
+  assert.equal(submittedOptions.headers["xi-api-key"], "test-api-key");
+  assert.deepEqual(JSON.parse(submittedOptions.body), {
+    text: "Please take your medicine with food.",
+    model_id: "eleven_multilingual_v2",
+  });
+});
+
+test("requires a configured ElevenLabs voice for speech generation", async () => {
+  const { url } = await startServer({ apiKey: "test-api-key", voiceId: "" });
+  const response = await fetch(`${url}/api/speak`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: "Patient instructions." }),
+  });
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: "Speech generation is not configured on the server.",
+  });
+});
+
+test("rejects empty or oversized speech text without contacting ElevenLabs", async () => {
+  const { url } = await startServer({
+    apiKey: "test-api-key",
+    voiceId: "test-voice",
+    fetchImpl: async () => {
+      assert.fail("Provider must not be called for invalid text.");
+    },
+  });
+
+  const emptyResponse = await fetch(`${url}/api/speak`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: "   " }),
+  });
+  assert.equal(emptyResponse.status, 400);
+
+  const longResponse = await fetch(`${url}/api/speak`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: "a".repeat(5001) }),
+  });
+  assert.equal(longResponse.status, 413);
+});
+
 test("does not return provider error details to the caller", async () => {
   const { url } = await startServer({
     apiKey: "test-api-key",
