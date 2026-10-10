@@ -419,112 +419,21 @@
         min-height: 5rem;
       }
 
-      .care-suggestions > label,
-      .care-suggestions .speech-controls label {
+      .care-suggestions > label {
         min-height: 0;
         padding: 0.25rem 0;
       }
 
-      .avs-transcript {
-        max-height: 18rem;
-        overflow-y: scroll;
-        padding: 0.875rem;
-        border: 1px solid var(--border);
-        border-radius: 3px;
-        background-color: var(--surface);
-        user-select: text;
-      }
-
-      .avs-transcript p {
-        margin-block: 0 1em;
-      }
-
-      .avs-transcript p:last-child {
-        margin-bottom: 0;
-      }
-
-      .transcript-note {
-        margin-top: 0.75rem;
-        color: var(--muted-text);
-        font-size: 1rem;
-      }
-
-      .selection-tools {
-        position: fixed;
-        z-index: 5;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        max-width: min(24rem, calc(100vw - 1rem));
-        padding: 0.5rem;
-        border: 1px solid var(--border);
-        border-radius: 3px;
-        background-color: var(--surface);
-        box-shadow: 0 2px 8px rgb(0 0 0 / 18%);
-      }
-
-      .selection-tools[hidden] {
-        display: none;
-      }
-
-      .selection-tools button {
-        min-height: 44px;
-        padding: 0.5rem 0.75rem;
-        font-size: 1rem;
-      }
-
-      .simplify-dialog {
-        width: min(34rem, calc(100% - 2rem));
-        max-height: min(80vh, 42rem);
-        overflow-y: auto;
-        padding: 1.5rem;
-        border: 1px solid var(--border);
-        border-radius: 3px;
-        background-color: var(--surface);
-        color: var(--text);
-      }
-
-      .simplify-dialog::backdrop {
-        background-color: rgb(0 0 0 / 55%);
-      }
-
-      .simplify-dialog h2 {
-        margin-block: 0 0.75rem;
-        font-size: 1.3rem;
-      }
-
-      .simplify-dialog p {
-        max-width: none;
-        overflow-wrap: anywhere;
-      }
-
-      .simplify-dialog .dialog-selection {
-        padding: 0.75rem;
-        border-left: 4px solid var(--link);
-        background-color: var(--page-background);
-      }
-
-      .simplify-dialog .dialog-placeholder {
-        color: var(--muted-text);
-      }
-
-      .dialog-actions {
-        display: flex;
-        justify-content: flex-end;
-        margin-top: 1rem;
+      .avs-document-link {
+        display: block;
+        width: fit-content;
+        margin-inline: auto;
       }
 
       .speech-controls {
         display: grid;
         gap: 0.5rem;
         margin-top: 0.5rem;
-      }
-
-      .speech-controls label {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 1rem;
       }
 
       .speech-buttons {
@@ -538,7 +447,6 @@
         padding: 0.55rem 0.875rem;
       }
 
-      .speech-note,
       #speech-status {
         margin: 0;
         color: var(--muted-text);
@@ -701,13 +609,8 @@
 
         <section class="patient-section avs-section" aria-labelledby="avs-heading">
           <h2 id="avs-heading">After-visit summary (AVS)</h2>
-          <p class="section-description">Select a sentence to hear it read aloud or view a simpler explanation.</p>
           <p id="load-status" class="patient-status" role="status" aria-live="polite">Loading your discharge information…</p>
-          <div id="avs-transcript" class="avs-transcript" tabindex="0" aria-describedby="transcript-note">
-            <p>Your discharge instructions will appear here.</p>
-          </div>
-          <p id="transcript-note" class="transcript-note">Select text to hear it read aloud or view a simpler explanation.</p>
-          <a id="pdf-link" class="button" target="_blank" rel="noopener noreferrer" hidden>View or download discharge PDF</a>
+          <a id="pdf-link" class="button avs-document-link" target="_blank" rel="noopener noreferrer" hidden>View or download discharge PDF</a>
         </section>
       </div>
 
@@ -722,20 +625,10 @@
             name="patient-data"
             rows="4"
             maxlength="5000"
-            aria-describedby="speech-privacy-note"
             placeholder="Care suggestions will appear here"
           ></textarea>
 
           <div class="speech-controls">
-            <p id="speech-privacy-note" class="speech-note">
-              Approved text is sent to ElevenLabs to generate audio.
-            </p>
-
-            <label for="speech-approval">
-              <input id="speech-approval" type="checkbox">
-              I confirm any text sent to ElevenLabs is approved by my organization.
-            </label>
-
             <div class="speech-buttons">
               <button id="read-aloud" type="button" disabled>Play Out Loud</button>
               <button id="stop-reading" type="button" disabled>Stop reading</button>
@@ -755,24 +648,9 @@
       </aside>
     </main>
 
-    <div id="selection-tools" class="selection-tools" role="group" aria-label="Selected transcript text actions" hidden>
-      <button id="read-selection" type="button">Read selected sentence aloud</button>
-      <button id="simplify-selection" type="button">Explain this sentence</button>
-    </div>
-
-    <dialog id="simplify-dialog" class="simplify-dialog" aria-labelledby="simplify-heading">
-      <h2 id="simplify-heading">Simplify this sentence</h2>
-      <p id="simplify-source" class="dialog-selection"></p>
-      <p id="simplify-placeholder" class="dialog-placeholder">A plain-language explanation will appear here when the AI simplification service is connected.</p>
-      <div class="dialog-actions">
-        <button id="close-simplify" type="button">Close</button>
-      </div>
-    </dialog>
-
     <script>
       (() => {
         const patientData = document.querySelector("#patient-data");
-        const approval = document.querySelector("#speech-approval");
         const loadStatus = document.querySelector("#load-status");
         const pdfLink = document.querySelector("#pdf-link");
         const readButton = document.querySelector("#read-aloud");
@@ -781,21 +659,12 @@
         const audioPlayer = document.querySelector("#patient-audio");
         const checklistTabs = [...document.querySelectorAll(".checklist-tabs [role='tab']")];
         const checklistItems = document.querySelector("#checklist-items");
-        const transcriptElement = document.querySelector("#avs-transcript");
-        const selectionTools = document.querySelector("#selection-tools");
-        const readSelectionButton = document.querySelector("#read-selection");
-        const simplifySelectionButton = document.querySelector("#simplify-selection");
-        const simplifyDialog = document.querySelector("#simplify-dialog");
-        const simplifySource = document.querySelector("#simplify-source");
-        const closeSimplifyButton = document.querySelector("#close-simplify");
         const checkedItems = {
           medications: [false, false],
           wounds: [false, false],
         };
         let activeCategory = "medications";
         let audioUrl = null;
-        let selectedTranscriptText = "";
-        let transcript = "";
 
         function setStatus(message, state = "idle") {
           status.textContent = message;
@@ -873,42 +742,6 @@
           return result.error || "Speech generation failed. Please try again.";
         }
 
-        function updateSelectionTools() {
-          const selection = window.getSelection();
-          const selectedText = selection?.toString().trim() || "";
-          if (!selection || !selectedText || !transcriptElement.contains(selection.anchorNode)) {
-            selectionTools.hidden = true;
-            selectedTranscriptText = "";
-            return;
-          }
-
-          const range = selection.getRangeAt(0);
-          if (!transcriptElement.contains(range.endContainer)) {
-            selectionTools.hidden = true;
-            selectedTranscriptText = "";
-            return;
-          }
-
-          selectedTranscriptText = selectedText;
-          const rect = range.getBoundingClientRect();
-          selectionTools.hidden = false;
-          const toolsRect = selectionTools.getBoundingClientRect();
-          selectionTools.style.left = `${Math.max(
-            8,
-            Math.min(rect.left, window.innerWidth - toolsRect.width - 8),
-          )}px`;
-          selectionTools.style.top = `${Math.max(
-            8,
-            Math.min(rect.bottom + 8, window.innerHeight - toolsRect.height - 8),
-          )}px`;
-        }
-
-        function openSimplifyDialog() {
-          if (!selectedTranscriptText) return;
-          simplifySource.textContent = selectedTranscriptText;
-          if (!simplifyDialog.open) simplifyDialog.showModal();
-        }
-
         function clearAudioUrl() {
           if (audioUrl) {
             URL.revokeObjectURL(audioUrl);
@@ -933,18 +766,7 @@
               throw new Error(result.error || "Discharge information could not be loaded.");
             }
 
-            transcript = typeof result.transcript === "string" ? result.transcript : "";
-            const paragraphs = transcript
-              ? transcript.split(/\n+/).filter(Boolean).map((line) => {
-                const paragraph = document.createElement("p");
-                paragraph.textContent = line;
-                return paragraph;
-              })
-              : [Object.assign(document.createElement("p"), {
-                textContent: "No transcript was provided.",
-              })];
-            transcriptElement.replaceChildren(...paragraphs);
-            patientData.value = transcript;
+            patientData.value = typeof result.transcript === "string" ? result.transcript : "";
 
             if (result.pdfUrl) {
               pdfLink.href = result.pdfUrl;
@@ -953,7 +775,7 @@
               pdfLink.hidden = false;
             }
             setLoadStatus("Your discharge information is ready.");
-            readButton.disabled = !transcript || !approval.checked;
+            readButton.disabled = !patientData.value.trim();
           } catch (error) {
             setLoadStatus(error instanceof TypeError
               ? "Could not connect to the discharge server. Check your connection and refresh this page."
@@ -965,7 +787,7 @@
           audioPlayer.pause();
           audioPlayer.currentTime = 0;
           stopButton.disabled = true;
-          readButton.disabled = !transcript || !approval.checked;
+          readButton.disabled = !patientData.value.trim();
         }
 
         async function readTextAloud(text) {
@@ -974,15 +796,8 @@
             setStatus("There is no text to read aloud.", "error");
             return;
           }
-          if (!approval.checked) {
-            setStatus("Confirm that your organization approves sending this text to ElevenLabs.", "error");
-            approval.focus();
-            return;
-          }
-
           clearAudioUrl();
           readButton.disabled = true;
-          readSelectionButton.disabled = true;
           stopButton.disabled = true;
           setStatus("Generating audio. Please wait.");
 
@@ -1015,8 +830,7 @@
               await audioPlayer.play();
               setStatus("Playing generated audio.");
             } catch {
-              readButton.disabled = !transcript || !approval.checked;
-              readSelectionButton.disabled = !approval.checked;
+              readButton.disabled = !patientData.value.trim();
               setStatus("Audio is ready. Press Play on the audio player to listen.");
             }
           } catch (error) {
@@ -1026,10 +840,13 @@
                 : error.message || "Speech generation failed. Please try again.",
               "error",
             );
-            readButton.disabled = !transcript || !approval.checked;
-            readSelectionButton.disabled = !approval.checked;
+            readButton.disabled = !patientData.value.trim();
           }
         }
+
+        patientData.addEventListener("input", () => {
+          readButton.disabled = !patientData.value.trim() || !audioPlayer.paused;
+        });
 
         readButton.addEventListener("click", () => {
           if (!patientData.value.trim()) {
@@ -1040,39 +857,13 @@
           void readTextAloud(patientData.value);
         });
 
-        readSelectionButton.addEventListener("click", () => {
-          if (selectedTranscriptText) void readTextAloud(selectedTranscriptText);
-        });
-
-        simplifySelectionButton.addEventListener("click", openSimplifyDialog);
-        closeSimplifyButton.addEventListener("click", () => simplifyDialog.close());
-        simplifyDialog.addEventListener("click", (event) => {
-          if (event.target === simplifyDialog) simplifyDialog.close();
-        });
-        selectionTools.addEventListener("mousedown", (event) => event.preventDefault());
-        document.addEventListener("selectionchange", updateSelectionTools);
-        transcriptElement.addEventListener("pointerup", updateSelectionTools);
-        transcriptElement.addEventListener("keyup", updateSelectionTools);
-        window.addEventListener("resize", () => {
-          if (!selectionTools.hidden) updateSelectionTools();
-        });
-        window.addEventListener("scroll", () => {
-          if (!selectionTools.hidden) updateSelectionTools();
-        }, true);
-
         stopButton.addEventListener("click", () => {
           stopReading();
           setStatus("Playback stopped.");
         });
 
-        approval.addEventListener("change", () => {
-          readButton.disabled = !transcript || !approval.checked;
-          readSelectionButton.disabled = !approval.checked;
-        });
-
         audioPlayer.addEventListener("play", () => {
           readButton.disabled = true;
-          readSelectionButton.disabled = true;
           stopButton.disabled = false;
           setStatus("Playing generated audio.");
         });
@@ -1080,15 +871,13 @@
         audioPlayer.addEventListener("pause", () => {
           if (!audioPlayer.ended) {
             stopButton.disabled = true;
-            readButton.disabled = !transcript || !approval.checked;
-            readSelectionButton.disabled = !approval.checked;
+            readButton.disabled = !patientData.value.trim();
           }
         });
 
         audioPlayer.addEventListener("ended", () => {
           stopButton.disabled = true;
-          readButton.disabled = !transcript || !approval.checked;
-          readSelectionButton.disabled = !approval.checked;
+          readButton.disabled = !patientData.value.trim();
           setStatus("Playback finished.");
         });
 

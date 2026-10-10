@@ -151,11 +151,15 @@ test("serves the patient view page with read-aloud controls", async () => {
   assert.match(page, /Recovery checklist/);
   assert.match(page, /id="medications-tab"/);
   assert.match(page, /id="wounds-tab"/);
-  assert.match(page, /id="avs-transcript"/);
-  assert.match(page, /id="simplify-selection"/);
+  assert.doesNotMatch(page, /id="avs-transcript"/);
+  assert.doesNotMatch(page, /Select a sentence to hear it read aloud or view a simpler explanation\./);
+  assert.doesNotMatch(page, /Approved text is sent to ElevenLabs to generate audio\./);
+  assert.doesNotMatch(page, /id="speech-approval"/);
   assert.match(page, /id="patient-data"/);
   assert.match(page, /Play Out Loud/);
+  assert.match(page, /Stop reading/);
   assert.match(page, /id="pdf-link"/);
+  assert.match(page, /class="button avs-document-link"/);
   assert.match(page, /\/api\/discharge\//);
   assert.match(page, /\/api\/speak/);
 });
