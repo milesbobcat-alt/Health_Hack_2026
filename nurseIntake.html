@@ -112,71 +112,6 @@
         cursor: not-allowed;
       }
 
-      .recording-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-        justify-content: center;
-      }
-
-      .recording-status {
-        min-height: 1.5em;
-        margin: 0;
-        color: var(--muted-text);
-      }
-
-      .recording-status[data-state="recording"] {
-        color: var(--error);
-        font-weight: 600;
-      }
-
-      .recording-status[data-state="error"] {
-        color: var(--error);
-      }
-
-      input[type="file"] {
-        box-sizing: border-box;
-        width: 100%;
-        min-height: 3rem;
-        padding: 0.5rem;
-        border: 1px solid var(--border);
-        border-radius: 3px;
-        background-color: var(--surface);
-        color: var(--text);
-        font: inherit;
-      }
-
-      input[type="file"]::file-selector-button {
-        min-height: 2.5rem;
-        margin-right: 0.75rem;
-        padding: 0.4rem 0.75rem;
-        border: 1px solid var(--link);
-        border-radius: 3px;
-        background-color: var(--surface);
-        color: var(--link);
-        font: inherit;
-        cursor: pointer;
-      }
-
-      .pdf-card {
-        grid-column: 1 / -1;
-      }
-
-      .pdf-attachment {
-        display: grid;
-        gap: 0.75rem;
-      }
-
-      .pdf-status {
-        min-height: 1.5em;
-        margin: 0;
-        color: var(--muted-text);
-      }
-
-      .pdf-status[data-state="error"] {
-        color: var(--error);
-      }
-
       textarea {
         box-sizing: border-box;
         width: 100%;
@@ -285,34 +220,6 @@
         margin: 0;
       }
 
-      .recording-placeholder {
-        display: grid;
-        flex: 1;
-        min-height: 14rem;
-        place-content: center;
-        justify-items: center;
-        gap: 1rem;
-        padding: 1.5rem;
-        border: 2px dashed var(--border);
-        border-radius: 3px;
-        text-align: center;
-      }
-
-      .recording-placeholder p {
-        margin: 0;
-        color: var(--muted-text);
-      }
-
-      .coming-soon {
-        display: inline-block;
-        padding: 0.2rem 0.6rem;
-        border: 1px solid var(--border);
-        border-radius: 3px;
-        color: var(--muted-text);
-        font-size: 1rem;
-        font-weight: 600;
-      }
-
       .text-entry {
         display: flex;
         flex: 1;
@@ -324,13 +231,68 @@
         font-weight: 600;
       }
 
-      .privacy-note {
-        margin-top: 1.5rem;
-        font-size: 1rem;
-      }
-
-      .privacy-note p {
-        margin-block: 0 0.5em;
+      .privacy-note { margin-top: 1.5rem; font-size: .9rem; }
+      .privacy-note p { margin-block: 0 0.5em; }
+      .checklist-workflow { margin-top: 1.5rem; padding: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+      .checklist-workflow h2 { margin: 0 0 .4rem; font-size: 1.5rem; }
+      .checklist-workflow > p { margin-bottom: .75rem; }
+      .reminder-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .75rem; margin: .75rem 0; }
+      .reminder-fields label { display: grid; gap: .25rem; }
+      input[type="tel"], input[type="email"], input[type="file"] { max-width: 100%; font: inherit; }
+      .reminder-fields input, .step-card input, .step-card select, .warning-card input, .share-box select { box-sizing: border-box; min-height: 2.75rem; padding: .55rem .7rem; border: 1px solid #b7c5d8; border-radius: 8px; background: #fff; color: #172b4d; font: inherit; }
+      .consent-row { display: flex; align-items: flex-start; gap: .5rem; margin: .75rem 0; }
+      #workflow-status { margin: .6rem 0; color: var(--muted-text); font-size: .9rem; overflow-wrap: anywhere; }
+      .review-group { margin: 1rem 0; padding: .9rem; border: 1px solid #dbe4f0; border-radius: 10px; background: #f7f9fc; }
+      .review-group h3 { margin: 0 0 .55rem; color: #294b82; font-size: 1rem; }
+      .step-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .55rem; margin: .55rem 0; padding: .75rem; border: 1px solid #dbe4f0; border-radius: 9px; background: #fff; }
+      .step-card > input { width: 100%; }
+      .step-meta { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .55rem; }
+      .step-meta label { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: .45rem; color: #53657e; font-size: .82rem; }
+      .source-trace { grid-column: 1 / -1; margin: 0; color: #58677c; font-size: .82rem; }
+      .source-trace summary { width: fit-content; color: #315fc4; cursor: pointer; }
+      .source-trace p { margin: .35rem 0 0; }
+      .quiet-button { width: fit-content; min-height: 2.4rem; padding: .4rem .7rem; border: 1px solid #b9c9df; border-radius: 8px; background: white; color: #2853a0; font-size: .85rem; }
+      .step-card > .quiet-button { grid-column: 2; grid-row: 1; }
+      .warning-card { display: flex; gap: .5rem; align-items: center; margin: .5rem 0; padding: .6rem; border: 1px solid #e4c6c3; border-left: 3px solid #bf4b45; border-radius: 8px; background: white; }
+      .warning-card input { flex: 1; }
+      .medication-panel { margin: .9rem 0; padding: .9rem; border: 1px solid #dbe4f0; border-radius: 9px; background: #fff; }
+      .medication-panel h3 { margin: 0 0 .5rem; font-size: 1rem; }
+      .medication-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      .medication-table th, .medication-table td { width: 50%; padding: .55rem; border: 1px solid #dbe4f0; text-align: left; vertical-align: top; }
+      .medication-table th { background: #f4f7fc; color: #315fc4; font-size: .88rem; }
+      .medication-table input { width: 100%; min-width: 0; min-height: 2.5rem; padding: .45rem .55rem; border: 1px solid #c8d3e1; border-radius: 6px; font: inherit; font-size: .9rem; }
+      .medication-table tr:nth-child(even) td { background: #f9fbfe; }
+      .share-box { margin-top: 1rem; padding: 1rem; border: 1px solid #dbe4f0; border-radius: 10px; background: #f7f9fc; }
+      .share-box h3 { margin: 0 0 .25rem; font-size: 1.05rem; }
+      .share-box p { margin-bottom: .6rem; color: var(--muted-text); font-size: .88rem; }
+      [hidden] { display: none !important; }
+      .result-box { margin-top: .75rem; padding: .75rem; border: 1px solid #dbe4f0; border-radius: 8px; background: white; overflow-wrap: anywhere; }
+      .result-box a { color: #2853a0; font-weight: 700; }
+      .result-box .patient-link-button { display: inline-block; margin: .4rem .4rem .2rem 0; padding: .65rem .9rem; border-radius: 8px; background: #315fc4; color: #fff; text-decoration: none; }
+      .result-box .patient-link-button:hover { background: #244ba0; }
+      :root { --page-background:#f5f7fb; --text:#182433; --muted-text:#5c6878; --link:#315fc4; --accent-action:#244ba0; --border:#d5dce6; --focus:#1d4ed8; --error:#b42318; }
+      :root[data-theme="dark"] { --page-background:#1f1f1f; --text:#f5f5f5; --muted-text:#d0d0d0; --link:#d478ff; --accent-action:#b0006a; --border:#b8b8b8; --focus:#ff83ca; --error:#ff8585; }
+      body { background: var(--page-background); font-size: 1rem; letter-spacing: 0; word-spacing: .02em; }
+      button { border-radius: 8px; }
+      .source-card { border-color: #dbe2eb; border-radius: 12px; box-shadow: none; }
+      .source-card h2 { letter-spacing: -.01em; }
+      .source-options { grid-template-areas: "upload paste"; }
+      .source-card:nth-child(1) { grid-area: upload; }
+      .source-card:nth-child(2) { grid-area: paste; }
+      @media (max-width: 48rem) {
+        .source-options { grid-template-areas: "upload" "paste" "record"; gap: .75rem; }
+        .source-card { padding: 1rem; gap: .65rem; }
+        .checklist-workflow { padding: 1rem; }
+        .step-meta { grid-template-columns: 1fr 1fr; }
+        .step-card { grid-template-columns: minmax(0,1fr) auto; }
+        .step-card > input { grid-column: 1 / -1; }
+        .step-card > .quiet-button { grid-column: 1; grid-row: auto; }
+        .step-meta label { display: flex; flex-direction: column; align-items: stretch; }
+        .step-meta select { width: 100%; min-width: 0; }
+        .warning-card input { min-width: 0; }
+        .warning-card .remove-warning { max-width: 5.5rem; padding-inline: .45rem; white-space: normal; line-height: 1.15; }
+        .medication-table th, .medication-table td { padding: .35rem; font-size: .82rem; }
+        .medication-table input { padding: .35rem; font-size: .82rem; }
       }
 
       @media (max-width: 48rem) {
@@ -364,276 +326,362 @@
     <header class="page-header">
       <div class="header-content">
         <p class="workspace-label">Care instructions</p>
-        <p class="role-label">RN workspace</p>
+        <p class="role-label">RN</p>
       </div>
     </header>
 
     <main>
       <section class="intro" aria-labelledby="page-title">
         <h1 id="page-title">Add care instructions</h1>
-        <p>Record spoken instructions or paste text from the electronic medical record.</p>
+        <p>Create a checklist from discharge instructions.</p>
       </section>
 
       <div class="source-options">
-        <section class="source-card" aria-labelledby="record-heading">
-          <h2 id="record-heading">Record audio</h2>
-          <p class="card-description">Speak the care instructions you want to add.</p>
-          <div class="recording-placeholder">
-            <p id="recording-help">Allow microphone access, then record the care instructions.</p>
-            <div class="recording-actions">
-              <button id="start-recording" type="button" aria-describedby="recording-help">Start recording</button>
-              <button id="stop-recording" type="button" disabled>Stop and transcribe</button>
-            </div>
-            <p id="recording-status" class="recording-status" role="status" aria-live="polite" data-state="idle"></p>
+        <section class="source-card" aria-labelledby="upload-heading">
+          <h2 id="upload-heading">Upload a PDF</h2>
+          <p class="card-description">Upload and review extracted text.</p>
+          <div class="text-entry">
+            <label for="pdf-file">Choose a PDF file</label>
+            <input id="pdf-file" type="file" accept=".pdf,application/pdf" aria-describedby="pdf-status">
+            <p id="pdf-status" role="status" aria-live="polite"></p>
           </div>
         </section>
 
         <section class="source-card" aria-labelledby="paste-heading">
-          <h2 id="paste-heading">Paste from the EMR</h2>
-          <p class="card-description">Copy/paste instructions into the text area.</p>
+          <h2 id="paste-heading">Copy and paste</h2>
+          <p class="card-description">Paste instructions from the record.</p>
           <div class="text-entry">
             <label for="emr-text">Care instructions</label>
             <textarea id="emr-text" name="emr-text" rows="8" placeholder="Example discharge instruction text"></textarea>
           </div>
         </section>
+      </div>
 
-        <section class="source-card pdf-card" aria-labelledby="pdf-heading">
-          <h2 id="pdf-heading">Attach a PDF</h2>
-          <p id="pdf-help" class="card-description">Choose one PDF file to attach to this page.</p>
-          <div class="pdf-attachment">
-            <label for="pdf-file">PDF document</label>
-            <input
-              id="pdf-file"
-              name="pdf-file"
-              type="file"
-              accept=".pdf,application/pdf"
-              aria-describedby="pdf-help pdf-status"
-            >
-            <p id="pdf-status" class="pdf-status" role="status" aria-live="polite" data-state="idle"></p>
-            <button id="remove-pdf" type="button" hidden>Remove PDF</button>
-          </div>
+      <section class="checklist-workflow" aria-labelledby="checklist-heading">
+        <h2 id="checklist-heading">Create a patient checklist</h2>
+        <p>Review steps and timing before sharing.</p>
+        <div id="case-picker" hidden>
+          <label for="case-select">Patient or example in this document</label>
+          <select id="case-select"><option value="">Choose one</option></select>
+        </div>
+        <button id="make-checklist" type="button">Make checklist draft</button>
+        <p id="workflow-status" role="status" aria-live="polite"></p>
+        <div id="draft-items"></div>
+        <div id="warning-items"></div>
+        <div id="medication-changes" hidden></div>
+        <button id="add-step" class="quiet-button" type="button" hidden>Add a step</button>
+        <section class="share-box" aria-label="Share checklist">
+        <h3>Share the reviewed plan</h3>
+        <p>Demo messages are not sent.</p>
+        <label for="share-mode">Share method</label>
+        <select id="share-mode"><option value="link">Copy link only</option><option value="sms">Text message</option><option value="email">Email</option><option value="both">Text and email</option></select>
+        <div class="reminder-fields" id="contact-fields" hidden>
+          <label>Mobile number (international format)<input id="patient-phone" type="tel" autocomplete="tel" placeholder="+15551234567"></label>
+          <label>Email address<input id="patient-email" type="email" autocomplete="email" placeholder="patient@example.com"></label>
+        </div>
+        <label class="consent-row" id="consent-row" hidden><input id="reminder-consent" type="checkbox"> Patient agreed to receive messages.</label>
+        <label class="consent-row" id="daily-row" hidden><input id="daily-reminders" type="checkbox"> Daily reminders</label>
+        <button id="create-checklist" type="button" disabled>Create patient link</button>
+        <div id="share-result" class="result-box" hidden></div>
         </section>
-      </div>
+      </section>
 
-      <div class="privacy-note">
-        <p>Audio is sent to ElevenLabs for transcription. This app does not save recordings.</p>
-        <p>Only record information approved for your organization's privacy requirements, and review the transcript for accuracy.</p>
-        <p>Pasted text remains in this page and is not submitted.</p>
-        <p>A selected PDF remains in this page only; it is not uploaded or saved.</p>
-      </div>
+      <details class="privacy-note">
+        <summary>Privacy and demo info</summary>
+        <p>PDF files are sent to this local server for text extraction and are not saved.</p>
+        <p>Creating a checklist stores the reviewed steps and contacts in server memory for up to 30 days. A server restart clears them sooner. Do not use real patient information in this local demo.</p>
+      </details>
     </main>
     <script>
       (() => {
-        const maxRecordingBytes = 25 * 1024 * 1024;
-        const startButton = document.querySelector("#start-recording");
-        const stopButton = document.querySelector("#stop-recording");
         const transcriptField = document.querySelector("#emr-text");
-        const status = document.querySelector("#recording-status");
         const pdfInput = document.querySelector("#pdf-file");
         const pdfStatus = document.querySelector("#pdf-status");
-        const removePdfButton = document.querySelector("#remove-pdf");
 
-        let mediaRecorder = null;
-        let audioChunks = [];
-        let recordingSize = 0;
-        let recordingTooLarge = false;
-        let microphoneStream = null;
-
-        function setPdfStatus(message, state = "idle") {
-          pdfStatus.textContent = message;
-          pdfStatus.dataset.state = state;
-        }
-
-        pdfInput.addEventListener("change", () => {
-          const [file] = pdfInput.files;
-          if (!file) {
-            removePdfButton.hidden = true;
-            setPdfStatus("");
-            return;
-          }
-
-          if (!file.name.toLowerCase().endsWith(".pdf")
-            || (file.type && file.type !== "application/pdf")) {
+        pdfInput.addEventListener("change", async () => {
+          const file = pdfInput.files?.[0];
+          if (!file) return;
+          if (!/^https?:$/.test(location.protocol)) {
+            pdfStatus.textContent = "Open this page from the running local server to read PDFs.";
             pdfInput.value = "";
-            removePdfButton.hidden = true;
-            setPdfStatus("Choose a PDF document to attach.", "error");
             return;
           }
-
-          removePdfButton.hidden = false;
-          setPdfStatus(`${file.name} selected. It has not been uploaded.`);
-        });
-
-        removePdfButton.addEventListener("click", () => {
-          pdfInput.value = "";
-          removePdfButton.hidden = true;
-          setPdfStatus("PDF removed.");
-          pdfInput.focus();
-        });
-
-        function setStatus(message, state = "idle") {
-          status.textContent = message;
-          status.dataset.state = state;
-        }
-
-        function stopMicrophoneTracks() {
-          microphoneStream?.getTracks().forEach((track) => track.stop());
-          microphoneStream = null;
-        }
-
-        function resetControls() {
-          startButton.disabled = false;
-          stopButton.disabled = true;
-          document.querySelector(".source-card[aria-labelledby='record-heading']")
-            .removeAttribute("aria-busy");
-        }
-
-        function appendTranscript(text) {
-          const currentText = transcriptField.value;
-          transcriptField.value = currentText
-            ? `${currentText.trimEnd()}\n\n${text}`
-            : text;
-          transcriptField.dispatchEvent(new Event("input", { bubbles: true }));
-          transcriptField.focus();
-          transcriptField.setSelectionRange(
-            transcriptField.value.length,
-            transcriptField.value.length,
-          );
-        }
-
-        async function transcribeRecording(blob) {
-          setStatus("Uploading audio for transcription. Please wait.");
-          startButton.disabled = true;
-          stopButton.disabled = true;
-          document.querySelector(".source-card[aria-labelledby='record-heading']")
-            .setAttribute("aria-busy", "true");
-
+          if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
+            pdfStatus.textContent = "Choose a PDF file."; return;
+          }
+          if (file.size > 15 * 1024 * 1024) {
+            pdfStatus.textContent = "Choose a PDF under 15 MB."; return;
+          }
+          pdfInput.disabled = true;
+          pdfStatus.textContent = "Reading PDF text…";
           try {
-            const response = await fetch("/api/transcribe", {
-              method: "POST",
-              headers: {
-                "Content-Type": blob.type || "audio/webm",
-              },
-              body: blob,
+            const response = await fetch("/api/extract-pdf", {
+              method: "POST", headers: { "Content-Type": "application/pdf" }, body: file,
             });
-            let result;
-            try {
-              result = await response.json();
-            } catch {
-              throw new Error("The server returned an invalid response.");
-            }
-            if (!response.ok) {
-              throw new Error(result.error || "Transcription failed. Please try again.");
-            }
-            if (typeof result.text !== "string" || !result.text.trim()) {
-              throw new Error("No speech was recognized. Try recording again.");
-            }
-
-            appendTranscript(result.text.trim());
-            setStatus("Transcription added to care instructions. Review it for accuracy.");
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || "Could not extract PDF text.");
+            const extracted = result.text;
+            transcriptField.value = transcriptField.value.trim()
+              ? `${transcriptField.value.trimEnd()}\n\n${extracted}` : extracted;
+            transcriptField.dispatchEvent(new Event("input", { bubbles: true }));
+            pdfStatus.textContent = `Extracted text from ${result.pages} page${result.pages === 1 ? "" : "s"}. Review it before making a checklist.`;
+            transcriptField.focus();
           } catch (error) {
-            setStatus(
-              error instanceof TypeError
-                ? "Could not reach the transcription server. Open this page from the running local server and try again."
-                : error.message,
-              "error",
-            );
+            console.error("PDF text extraction failed:", error);
+            pdfStatus.textContent = location.protocol === "file:"
+              ? "Open the app at http://127.0.0.1:3000 to extract PDF text."
+              : error.message || "Could not extract text from this PDF.";
           } finally {
-            resetControls();
+            pdfInput.disabled = false;
+            pdfInput.value = "";
           }
+        });
+        const draftList = document.querySelector("#draft-items");
+        const workflowStatus = document.querySelector("#workflow-status");
+        const casePicker = document.querySelector("#case-picker");
+        const caseSelect = document.querySelector("#case-select");
+
+        function casesIn(text) {
+          const matches = [...text.matchAll(/^Example\s+\d+\s+[—–-].*$/gim)];
+          return matches.map((match, index) => ({
+            title: match[0].trim(),
+            text: text.slice(match.index, matches[index + 1]?.index ?? text.length),
+          }));
         }
 
-        function finishRecording() {
-          stopMicrophoneTracks();
+        function refreshCasePicker() {
+          const cases = casesIn(transcriptField.value);
+          const previousChoice = caseSelect.value;
+          casePicker.hidden = cases.length < 2;
+          caseSelect.replaceChildren(new Option("Choose one", ""));
+          cases.forEach((entry, index) => caseSelect.add(new Option(entry.title, String(index))));
+          if (previousChoice && Number(previousChoice) < cases.length) caseSelect.value = previousChoice;
+          return cases;
+        }
 
-          if (recordingTooLarge) {
-            audioChunks = [];
-            resetControls();
-            setStatus("Recording exceeded the 25 MB limit and was not uploaded.", "error");
-            return;
+        transcriptField.addEventListener("input", () => { refreshCasePicker(); });
+        refreshCasePicker();
+
+        const groupNames = { medication: "Medicines", care: "Care", testing: "Tests", avoid: "Avoid / do not" };
+        const warningList = document.querySelector("#warning-items");
+        const medicationView = document.querySelector("#medication-changes");
+        const shareMode = document.querySelector("#share-mode");
+        const shareResult = document.querySelector("#share-result");
+        let draft = { items: [], warnings: [] };
+        function draftFromText(source) {
+          function getBullets(heading, stopAt) {
+            const lines = source.split(/\r?\n/);
+            const start = lines.findIndex((line) => new RegExp(`^\\s*${heading}\\s*:?\\s*$`, "i").test(line));
+            if (start < 0) return [];
+            const result = [];
+            for (const line of lines.slice(start + 1)) {
+              if (stopAt.test(line)) break;
+              const bullet = line.match(/^\s*(?:[•*-]|\d+[.)])\s+(.+)/);
+              if (bullet) result.push(bullet[1].trim());
+              else if (line.trim() && result.length) result[result.length - 1] += ` ${line.trim()}`;
+            }
+            return result.map((line) => line.replace(/\s+/g, " ").trim());
           }
-
-          const audioBlob = new Blob(audioChunks, {
-            type: mediaRecorder.mimeType || audioChunks[0]?.type || "audio/webm",
+          const classify = (text) => {
+            if (/\b(avoid|do not|don't|never|refrain|no driving|no lifting|do not use|do not take)\b/i.test(text)) return "avoid";
+            if (/\b(medicin\w*|medicat\w*|antibiotic\w*|dose\w*|tablet\w*|capsule\w*|inhaler\w*|prescription\w*|apixaban|insulin|metformin|lisinopril|aspirin|metoprolol|atorvastatin|amlodipine|losartan|warfarin|furosemide|prednisone|albuterol|amoxicillin|omeprazole|levothyroxine|gabapentin|oxycodone|sertraline|ondansetron|clopidogrel|[a-z]+(?:pril|sartan|statin|olol|prazole|cillin|floxacin|gliptin|gliflozin))\b/i.test(text)) return "medication";
+            if (/\b(test|lab|blood work|panel|creatinine|potassium|electrolytes|glucose|blood sugar)\b/i.test(text)) return "testing";
+            return "care";
+          };
+          function splitFollowUp(text) {
+            const match = text.match(/^Follow up with (.+?) (within .+|as arranged\.?|as directed\.?)$/i);
+            if (!match) return [text];
+            const people = match[1].split(/,\s*and\s+|,\s*|\s+and\s+/i).map((part) => part.trim()).filter(Boolean);
+            return people.length > 1 && people.length <= 4 ? people.map((person) => `Follow up with ${person} ${match[2]}`) : [text];
+          }
+          const steps = getBullets("Discharge Instructions", /^\s*(?:Return Precautions|Warning Signs|Nursing Discharge Teaching|Example\s+\d+)\b/i);
+          const sourceSteps = steps.length ? steps : source.split(/\r?\n/).map((line) => line.replace(/^\s*(?:[•*-]|\d+[.)])\s*/, "").trim()).filter(Boolean);
+          function medicationList(heading) {
+            const lines = source.split(/\r?\n/);
+            const start = lines.findIndex((line) => heading.test(line.trim()));
+            if (start < 0) return [];
+            const entries = [];
+            const endHeading = /^\s*(?:Home Medications?|Home Medication List|Current Outpatient Medications|Outpatient Medications Prior to Admission|Medications Prior to Admission|Medications Before Admission|Prior to Admission Medications|Pre[- ]Admission Medications|Prehospital Medications|Prehospital Medication List|Medication List Before Hospitalization|Medications at Home|Discharge Medications?|Discharge Medication List|Medications at Discharge|Medications on Discharge|Medication List at Discharge|Medication Changes at Discharge|Discharge Instructions|Return Precautions|Warning Signs|Follow[- ]?up|Allergies|Diagnosis|Diagnoses|Hospital Course|Physical Examination|Patient Instructions|Nursing Discharge Teaching|Example\s+\d+)\b/i;
+            for (const line of lines.slice(start + 1)) {
+              if (endHeading.test(line)) break;
+              const clean = line.trim().replace(/^(?:[•*-]|\d+[.)])\s+/, "");
+              if (!clean) continue;
+              if (/^[A-Z][A-Z\s/&-]{2,45}:?$/.test(clean) && !/\d/.test(clean)) break;
+              if (/^(?:Name|Medication|Dose|Route|Frequency)\s*:?$/i.test(clean)) continue;
+              if (/^\s*(?:[•*-]|\d+[.)])\s+/.test(line) || !entries.length) entries.push(clean);
+              else entries[entries.length - 1] += ` ${clean}`;
+            }
+            return entries.map((entry) => entry.replace(/\s+/g, " ").trim()).filter(Boolean);
+          }
+          const medicationChanges = {
+            before: medicationList(/^(?:Home Medications?|Home Medication List|Current Outpatient Medications|Outpatient Medications Prior to Admission|Medications Prior to Admission|Medications Before Admission|Prior to Admission Medications|Pre[- ]Admission Medications|Prehospital Medications|Prehospital Medication List|Medication List Before Hospitalization|Medications at Home)\s*:?\s*$/i),
+            after: medicationList(/^(?:Discharge Medications?|Discharge Medication List|Medications at Discharge|Medications on Discharge|Medication List at Discharge|Medication Changes at Discharge)\s*:?\s*$/i),
+          };
+          return {
+            items: sourceSteps.flatMap((sourceText) => splitFollowUp(sourceText).map((text) => ({
+              text: text.replace(/\.$/, ""), category: classify(text),
+              frequency: /\b(daily|each day|each morning|every day|every morning|once daily|twice daily|nightly|four times daily)\b/i.test(text) ? "daily" : "once",
+              source: sourceText, done: false,
+            }))),
+            warnings: [
+              ...getBullets("Return Precautions", /^\s*(?:Warning Signs|Nursing Discharge Teaching|Example\s+\d+)\b/i),
+              ...getBullets("Warning Signs", /^\s*(?:Return Precautions|Nursing Discharge Teaching|Example\s+\d+)\b/i),
+            ],
+            medicationChanges,
+          };
+        }
+        function renderDraft() {
+          draftList.replaceChildren();
+          for (const [category, name] of Object.entries(groupNames)) {
+            const indices = draft.items.map((item, index) => item.category === category ? index : -1).filter((index) => index >= 0);
+            if (!indices.length) continue;
+            const group = document.createElement("section"); group.className = "review-group";
+            const heading = document.createElement("h3"); heading.textContent = `${name} · ${indices.length}`; group.append(heading);
+            for (const index of indices) {
+              const item = draft.items[index];
+              const card = document.createElement("div"); card.className = "step-card";
+              const input = document.createElement("input"); input.value = item.text; input.setAttribute("aria-label", `Step ${index + 1}`);
+              input.addEventListener("input", () => { item.text = input.value; });
+              const meta = document.createElement("div"); meta.className = "step-meta";
+              const categoryLabel = document.createElement("label"); categoryLabel.textContent = "Category";
+              const categorySelect = document.createElement("select");
+              for (const [key, label] of Object.entries(groupNames)) categorySelect.add(new Option(label, key));
+              categorySelect.value = item.category;
+              categorySelect.addEventListener("change", () => { item.category = categorySelect.value; renderDraft(); });
+              categoryLabel.append(categorySelect);
+              const timingLabel = document.createElement("label"); timingLabel.textContent = "Timing";
+              const timingSelect = document.createElement("select"); timingSelect.add(new Option("As directed", "once")); timingSelect.add(new Option("Daily", "daily"));
+              timingSelect.value = item.frequency; timingSelect.addEventListener("change", () => { item.frequency = timingSelect.value; }); timingLabel.append(timingSelect);
+              meta.append(categoryLabel, timingLabel);
+              const source = document.createElement("details"); source.className = "source-trace";
+              const sourceLabel = document.createElement("summary"); sourceLabel.textContent = "View source wording";
+              const sourceText = document.createElement("p"); sourceText.textContent = item.source || "Added by reviewer";
+              source.append(sourceLabel, sourceText);
+              const remove = document.createElement("button"); remove.type = "button"; remove.className = "quiet-button"; remove.textContent = "Remove step";
+              remove.addEventListener("click", () => { draft.items.splice(index, 1); renderDraft(); });
+              card.append(input, meta, source, remove); group.append(card);
+            }
+            draftList.append(group);
+          }
+          warningList.replaceChildren();
+          if (draft.warnings.length) { const heading = document.createElement("h3"); heading.textContent = "Warning signs"; warningList.append(heading); }
+          draft.warnings.forEach((warning, index) => {
+            const card = document.createElement("div"); card.className = "warning-card";
+            const input = document.createElement("input"); input.value = warning; input.setAttribute("aria-label", `Warning sign ${index + 1}`);
+            input.addEventListener("input", () => { draft.warnings[index] = input.value; });
+            const remove = document.createElement("button"); remove.type = "button"; remove.className = "quiet-button"; remove.textContent = "Remove warning";
+            remove.classList.add("remove-warning");
+            remove.addEventListener("click", () => { draft.warnings.splice(index, 1); renderDraft(); });
+            card.append(input, remove); warningList.append(card);
           });
-          audioChunks = [];
-
-          if (audioBlob.size === 0) {
-            resetControls();
-            setStatus("No audio was recorded. Please try again.", "error");
-            return;
-          }
-
-          void transcribeRecording(audioBlob);
-        }
-
-        async function startRecording() {
-          if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-            setStatus("Audio recording is not supported by this browser.", "error");
-            return;
-          }
-
-          startButton.disabled = true;
-          setStatus("Requesting microphone access.");
-
-          try {
-            microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mimeType = [
-              "audio/webm;codecs=opus",
-              "audio/webm",
-              "audio/ogg;codecs=opus",
-              "audio/mp4",
-            ].find((type) => MediaRecorder.isTypeSupported(type));
-            mediaRecorder = mimeType
-              ? new MediaRecorder(microphoneStream, { mimeType })
-              : new MediaRecorder(microphoneStream);
-            audioChunks = [];
-            recordingSize = 0;
-            recordingTooLarge = false;
-
-            mediaRecorder.addEventListener("dataavailable", (event) => {
-              if (!event.data.size || recordingTooLarge) return;
-              recordingSize += event.data.size;
-              if (recordingSize > maxRecordingBytes) {
-                recordingTooLarge = true;
-                setStatus("Recording reached the 25 MB limit. Stopping without uploading.", "error");
-                mediaRecorder.stop();
-                return;
+          medicationView.replaceChildren();
+          const medicationChanges = draft.medicationChanges || { before: [], after: [] };
+          if (medicationChanges.before.length || medicationChanges.after.length) {
+            const panel = document.createElement("section"); panel.className = "medication-panel";
+            const heading = document.createElement("h3"); heading.textContent = "Medication comparison"; panel.append(heading);
+            const table = document.createElement("table"); table.className = "medication-table";
+            const thead = document.createElement("thead"); const headerRow = document.createElement("tr");
+            for (const label of ["Before hospitalization", "After hospitalization"]) { const th = document.createElement("th"); th.textContent = label; headerRow.append(th); }
+            thead.append(headerRow); table.append(thead);
+            const tbody = document.createElement("tbody");
+            const rowCount = Math.max(medicationChanges.before.length, medicationChanges.after.length, 1);
+            for (let index = 0; index < rowCount; index++) {
+              const row = document.createElement("tr");
+              for (const side of ["before", "after"]) {
+                const cell = document.createElement("td"); const field = document.createElement("input");
+                field.type = "text";
+                field.setAttribute("aria-label", `${side === "before" ? "Before" : "After"} hospitalization medication ${index + 1}`);
+                field.value = medicationChanges[side][index] || "N/A";
+                field.addEventListener("change", () => {
+                  medicationChanges[side][index] = field.value.trim() || "N/A";
+                  while (medicationChanges[side].length > 1 && medicationChanges[side].at(-1) === "N/A") medicationChanges[side].pop();
+                  if (medicationChanges[side].length <= index) medicationChanges[side].length = index + 1;
+                  renderDraft();
+                });
+                cell.append(field); row.append(cell);
               }
-              audioChunks.push(event.data);
-            });
-            mediaRecorder.addEventListener("stop", finishRecording, { once: true });
-            mediaRecorder.addEventListener("error", () => {
-              stopMicrophoneTracks();
-              resetControls();
-              setStatus("The recording failed. Please try again.", "error");
-            }, { once: true });
-            mediaRecorder.start(1000);
-            stopButton.disabled = false;
-            setStatus("Recording. Select Stop and transcribe when finished.", "recording");
-          } catch (error) {
-            stopMicrophoneTracks();
-            resetControls();
-            setStatus(
-              error.name === "NotAllowedError" || error.name === "SecurityError"
-                ? "Microphone access was denied. Allow microphone access in your browser and try again."
-                : "Could not start the microphone. Check that it is connected and try again.",
-              "error",
-            );
+              tbody.append(row);
+            }
+            table.append(tbody); panel.append(table); medicationView.append(panel);
           }
+          document.querySelector("#add-step").hidden = false;
+          document.querySelector("#create-checklist").disabled = !draft.items.length;
         }
-
-        startButton.addEventListener("click", () => {
-          void startRecording();
-        });
-
-        stopButton.addEventListener("click", () => {
-          if (mediaRecorder?.state === "recording") {
-            stopButton.disabled = true;
-            setStatus("Stopping recording.");
-            mediaRecorder.stop();
+        document.querySelector("#add-step").addEventListener("click", () => { draft.items.push({ text: "", category: "care", frequency: "once", source: "" }); renderDraft(); });
+        document.querySelector("#make-checklist").addEventListener("click", () => {
+          document.querySelector("#create-checklist").disabled = true;
+          const selected = transcriptField.value.slice(transcriptField.selectionStart, transcriptField.selectionEnd);
+          const cases = refreshCasePicker();
+          if (cases.length > 1 && !selected.trim() && caseSelect.value === "") {
+            workflowStatus.textContent = "Choose the patient or example above, then make the draft.";
+            caseSelect.focus();
+            return;
           }
+          const source = selected.trim() || (cases.length > 1 ? cases[Number(caseSelect.value)].text : transcriptField.value);
+          try { draft = draftFromText(source); }
+          catch { workflowStatus.textContent = "Could not create the draft. Check the instructions and try again."; return; }
+          if (!draft.items.length) { workflowStatus.textContent = "Add instructions first."; return; }
+          if (draft.items.length > 30) { workflowStatus.textContent = "More than 30 steps were found. Select the relevant text in the source box and try again."; return; }
+          renderDraft();
+          workflowStatus.textContent = `${draft.items.length} steps · review before sharing`;
         });
+
+        shareMode.addEventListener("change", () => {
+          const messaging = shareMode.value !== "link";
+          document.querySelector("#contact-fields").hidden = !messaging;
+          document.querySelector("#consent-row").hidden = !messaging;
+          document.querySelector("#daily-row").hidden = !messaging;
+          document.querySelector("#patient-phone").closest("label").hidden = !["sms", "both"].includes(shareMode.value);
+          document.querySelector("#patient-email").closest("label").hidden = !["email", "both"].includes(shareMode.value);
+        });
+
+        document.querySelector("#create-checklist").addEventListener("click", async () => {
+          const items = draft.items.map(({ text, category, frequency }) => ({ text: text.trim(), category, frequency }));
+          const button = document.querySelector("#create-checklist");
+          button.disabled = true;
+          workflowStatus.textContent = "Creating checklist…";
+          try {
+            const response = await fetch("/api/checklists", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ items, warnings: draft.warnings.map((warning) => warning.trim()).filter(Boolean), medicationChanges: { before: draft.medicationChanges.before.map((entry) => entry || "N/A"), after: draft.medicationChanges.after.map((entry) => entry || "N/A") }, shareMode: shareMode.value,
+                reminders: document.querySelector("#daily-reminders").checked, phone: document.querySelector("#patient-phone").value.trim(),
+                email: document.querySelector("#patient-email").value.trim(),
+                consent: document.querySelector("#reminder-consent").checked }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || "Could not create checklist.");
+            const link = document.createElement("a");
+            link.href = result.link;
+            link.textContent = "Open patient checklist";
+            link.className = "patient-link-button";
+            link.target = "_blank";
+            link.rel = "noopener";
+            const copy = document.createElement("button"); copy.type = "button"; copy.className = "quiet-button"; copy.textContent = "Copy link";
+            copy.addEventListener("click", async () => { await navigator.clipboard.writeText(result.link); copy.textContent = "Copied"; });
+            const delivery = result.delivery.map((entry) => `${entry.channel}: ${entry.status}`).join("; ");
+            shareResult.hidden = false;
+            shareResult.replaceChildren(document.createTextNode(shareMode.value === "link" ? "Patient link ready" : `Patient link ready · ${delivery}`), document.createElement("br"), link, copy);
+            workflowStatus.textContent = "Created";
+            shareResult.scrollIntoView({ behavior: "smooth", block: "center" });
+            link.focus({ preventScroll: true });
+          } catch (error) {
+            if (location.protocol === "file:") {
+              const appLink = document.createElement("a");
+              appLink.href = "http://127.0.0.1:3000/";
+              appLink.target = "_blank";
+              appLink.rel = "noopener";
+              appLink.textContent = "Open the running demo";
+              workflowStatus.replaceChildren(document.createTextNode("This file can draft steps, but needs the running app to create a patient link. "), appLink);
+            } else if (error instanceof TypeError) {
+              workflowStatus.textContent = "Could not reach the local server. Start the demo at http://127.0.0.1:3000 and try again.";
+            } else {
+              workflowStatus.textContent = error.message;
+            }
+          }
+          finally { button.disabled = false; }
+        });
+
+
       })();
     </script>
   </body>
