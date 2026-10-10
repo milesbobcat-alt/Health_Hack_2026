@@ -226,3 +226,43 @@ test("does not return provider error details to the caller", async () => {
     providerStatus: 401,
   });
 });
+
+test("serves the recovery plan page", async () => {
+  const { url } = await startServer({ apiKey: "test-api-key" });
+  const response = await fetch(`${url}/recoveryPlan.html`);
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /^text\/html/);
+  assert.match(await response.text(), /Your recovery plan/);
+});
+
+test("returns the example recovery plan as JSON", async () => {
+  const { url } = await startServer();
+  const response = await fetch(`${url}/api/recovery-plan`);
+
+  assert.equal(response.status, 200);
+  const plan = await response.json();
+  assert.equal(plan.checkIn.medications[0].label, "Furosemide 40 mg");
+  assert.ok(plan.followUp.tasks.length > 0);
+  assert.ok(plan.medications.list.length > 0);
+  for (const medication of plan.medications.list) {
+    assert.equal(typeof medication.schedule.dose, "string", `${medication.name} needs a dose`);
+    assert.equal(typeof medication.schedule.frequency, "string", `${medication.name} needs a frequency`);
+  }
+});
+
+test("reports an error when the recovery plan cannot be read", async () => {
+  const { url } = await startServer({ recoveryPlanPath: "/nonexistent/plan.json" });
+  const response = await fetch(`${url}/api/recovery-plan`);
+
+  assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), { error: "The recovery plan could not be loaded." });
+});
+
+test("rejects non-GET recovery plan requests", async () => {
+  const { url } = await startServer();
+  const response = await fetch(`${url}/api/recovery-plan`, { method: "POST" });
+
+  assert.equal(response.status, 405);
+  assert.equal(response.headers.get("allow"), "GET");
+});

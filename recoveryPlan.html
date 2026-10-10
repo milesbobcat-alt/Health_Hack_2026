@@ -1,0 +1,1579 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Your Recovery Plan</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Open Sans", Arial, sans-serif;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        --page-background: #f2f2f2;
+        --surface: #ffffff;
+        --surface-muted: #f2f2f2;
+        --surface-strong: #e0e0e0;
+        --text: #1f1f1f;
+        --muted-text: #595959;
+        --placeholder: #737373;
+        --link: #3834a8;
+        --link-soft: #e7e6f6;
+        --accent: #db0084;
+        --accent-action: #b0006a;
+        --border: #767676;
+        --border-soft: #c4c4c4;
+        --warning-surface: #f3ebdf;
+        --warning-text: #7a4a12;
+        --focus: #a00060;
+        --error: #b20000;
+      }
+
+      :root[data-theme="beige"] {
+        --page-background: #f5f0e6;
+        --surface: #fffdf8;
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --page-background: #1f1f1f;
+        --surface: #292929;
+        --surface-muted: #333333;
+        --surface-strong: #454545;
+        --text: #f5f5f5;
+        --muted-text: #d0d0d0;
+        --placeholder: #c2c2c2;
+        --link: #d478ff;
+        --link-soft: #3a2f45;
+        --border: #b8b8b8;
+        --border-soft: #5c5c5c;
+        --warning-surface: #3d3123;
+        --warning-text: #f1c98f;
+        --focus: #ff83ca;
+        --error: #ff8585;
+      }
+
+      html {
+        min-height: 100%;
+        background-color: var(--page-background);
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        background-color: var(--page-background);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 1rem;
+        line-height: 1.5;
+        letter-spacing: 0.01em;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        font-weight: 600;
+        line-height: 1.3;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      a {
+        color: var(--link);
+      }
+
+      :focus-visible {
+        outline: 3px dashed var(--focus);
+        outline-offset: 3px;
+      }
+
+      button,
+      input,
+      textarea {
+        color: var(--text);
+        font: inherit;
+      }
+
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+
+      .eyebrow {
+        color: var(--link);
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .tag {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 3px;
+        background-color: var(--surface-strong);
+        color: var(--muted-text);
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      .tag-warning {
+        background-color: var(--warning-surface);
+        color: var(--warning-text);
+      }
+
+      .source-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 3px;
+        background-color: var(--link-soft);
+        color: var(--link);
+        font-size: 0.75rem;
+      }
+
+      .icon {
+        width: 1em;
+        height: 1em;
+        flex: none;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 2;
+      }
+
+      /* Top bars */
+      .utility-bar,
+      .site-header {
+        background-color: var(--surface);
+      }
+
+      .bar-content {
+        display: flex;
+        width: min(100% - 3rem, 76rem);
+        margin-inline: auto;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+
+      .utility-bar {
+        border-bottom: 1px solid var(--surface-strong);
+        color: var(--muted-text);
+        font-size: 0.8rem;
+      }
+
+      .utility-bar .bar-content {
+        min-height: 2.75rem;
+      }
+
+      .utility-links {
+        display: flex;
+        gap: 1rem;
+      }
+
+      .site-header .bar-content {
+        min-height: 4.5rem;
+        flex-wrap: wrap;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+        flex-wrap: wrap;
+      }
+
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        color: var(--text);
+        font-size: 1.4rem;
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      .logo-mark {
+        display: grid;
+        width: 1.6rem;
+        height: 1.6rem;
+        place-items: center;
+        border-radius: 5px;
+        background-color: var(--accent);
+        color: #ffffff;
+      }
+
+      .product-label {
+        color: var(--muted-text);
+        font-size: 0.8rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .account {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+        font-size: 0.875rem;
+      }
+
+      .help-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        text-decoration: none;
+      }
+
+      .avatar {
+        display: grid;
+        width: 2rem;
+        height: 2rem;
+        place-items: center;
+        border-radius: 50%;
+        background-color: var(--surface-strong);
+        font-size: 0.7rem;
+      }
+
+      .account-name {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        max-width: 7rem;
+        line-height: 1.3;
+      }
+
+      /* Layout */
+      .layout {
+        display: grid;
+        width: min(100% - 3rem, 76rem);
+        margin-inline: auto;
+        padding-block: 2rem 4rem;
+        grid-template-columns: 13.5rem minmax(0, 1fr);
+        gap: 1.5rem;
+        align-items: start;
+      }
+
+      /* Sidebar */
+      .sidebar {
+        position: sticky;
+        top: 1rem;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1rem;
+        padding: 1rem;
+        border: 1px solid var(--border-soft);
+        border-radius: 8px;
+        background-color: var(--surface);
+        font-size: 0.8rem;
+      }
+
+      .sidebar-section {
+        display: grid;
+        gap: 0.35rem;
+      }
+
+      .sidebar-section + .sidebar-section {
+        padding-top: 1rem;
+        border-top: 1px solid var(--border-soft);
+      }
+
+      .patient-name {
+        font-size: 1.25rem;
+      }
+
+      .sidebar .muted {
+        color: var(--muted-text);
+      }
+
+      .progress-card {
+        display: grid;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        border-radius: 6px;
+        background-color: var(--link-soft);
+        color: var(--link);
+        text-decoration: none;
+      }
+
+      .progress-track {
+        height: 4px;
+        border-radius: 2px;
+        background-color: var(--border-soft);
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background-color: var(--link);
+        transition: width 200ms ease;
+      }
+
+      .side-nav {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      .side-nav a {
+        display: flex;
+        min-height: 2.25rem;
+        align-items: center;
+        gap: 0.5rem;
+        padding-inline: 0.6rem;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text);
+        text-decoration: none;
+      }
+
+      .side-nav a[aria-current="page"] {
+        border-color: var(--link);
+        background-color: var(--link);
+        color: #ffffff;
+      }
+
+      .warning-panel {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+        padding: 0.75rem;
+        border-radius: 6px;
+        background-color: var(--warning-surface);
+        color: var(--warning-text);
+      }
+
+      .warning-header {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 0.5rem;
+      }
+
+      .warning-header h2 {
+        font-size: 0.95rem;
+        font-weight: 500;
+      }
+
+      .warning-panel ul {
+        display: grid;
+        gap: 0.4rem;
+        padding-left: 1rem;
+        list-style: disc;
+      }
+
+      .callout-box {
+        display: flex;
+        gap: 0.5rem;
+        padding: 0.6rem;
+        border: 1px solid var(--border-soft);
+        border-radius: 6px;
+        background-color: var(--surface);
+      }
+
+      .callout-box.subtle {
+        border-color: transparent;
+        background-color: var(--surface-muted);
+        color: var(--text);
+      }
+
+      .callout-box .icon {
+        margin-top: 0.15em;
+      }
+
+      /* Main content */
+      .content {
+        display: grid;
+        gap: 1.5rem;
+        min-width: 0;
+      }
+
+      .page-intro {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.5rem 1.5rem;
+        align-items: start;
+      }
+
+      .page-intro h1 {
+        font-size: 2rem;
+        font-weight: 500;
+      }
+
+      .page-intro > :not(.intro-actions) {
+        grid-column: 1;
+      }
+
+      .intro-dropdown {
+        max-width: 65ch;
+        color: var(--muted-text);
+      }
+
+      .intro-dropdown .dropdown-body {
+        font-size: 1.05rem !important;
+      }
+
+      .intro-actions {
+        display: grid;
+        grid-column: 2;
+        grid-row: 1 / span 3;
+        gap: 0.5rem;
+        align-self: center;
+      }
+
+      .button-outline {
+        display: inline-flex;
+        min-height: 2.75rem;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.4rem 1rem;
+        border: 1px solid var(--link);
+        border-radius: 6px;
+        background-color: var(--surface);
+        color: var(--link);
+        cursor: pointer;
+        text-decoration: none;
+      }
+
+      @media (hover: hover) {
+        .button-outline:hover {
+          border-color: var(--accent-action);
+          color: var(--accent-action);
+        }
+      }
+
+      .panel {
+        display: grid;
+        gap: 1rem;
+        padding: 1.25rem;
+        border: 1px solid var(--border-soft);
+        border-radius: 10px;
+        background-color: var(--surface);
+      }
+
+      .panel-description {
+        max-width: 65ch;
+        color: var(--muted-text);
+        font-size: 0.9rem;
+      }
+
+      .info-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 1rem;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        background-color: var(--surface-muted);
+        font-size: 0.9rem;
+      }
+
+      .info-row label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+
+      .info-row input {
+        min-height: 2.25rem;
+        padding: 0.2rem 0.5rem;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background-color: var(--surface);
+      }
+
+      /* Medication check-in */
+      .med-list {
+        display: grid;
+        gap: 0.6rem;
+      }
+
+      .med-row {
+        display: grid;
+        grid-template-columns: minmax(10rem, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) 6.5rem;
+        gap: 0.6rem;
+        align-items: center;
+        margin: 0;
+        padding: 0.6rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background-color: var(--surface);
+      }
+
+      .med-row legend {
+        float: left;
+        padding: 0 0.35rem;
+        font-size: 0.9rem;
+        font-weight: 500;
+      }
+
+      .choice {
+        position: relative;
+        display: grid;
+        min-height: 3.25rem;
+        place-items: center;
+        align-content: center;
+        gap: 0.3rem;
+        padding: 0.4rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background-color: var(--surface);
+        font-size: 0.8rem;
+        cursor: pointer;
+      }
+
+      .choice.choice-primary {
+        border-color: transparent;
+        background-color: var(--surface-strong);
+      }
+
+      .choice input {
+        width: 1rem;
+        height: 1rem;
+        margin: 0;
+        accent-color: var(--link);
+      }
+
+      .choice:has(input:checked) {
+        border-color: var(--link);
+        box-shadow: inset 0 0 0 1px var(--link);
+        color: var(--link);
+        font-weight: 600;
+      }
+
+      .choice:has(input:focus-visible) {
+        outline: 3px dashed var(--focus);
+        outline-offset: 2px;
+      }
+
+      .dose-times {
+        display: grid;
+        gap: 0.25rem;
+        font-size: 0.7rem;
+        color: var(--muted-text);
+      }
+
+      .dose-times input {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 1.9rem;
+        padding: 0.1rem 0.3rem;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background-color: var(--surface);
+        font-size: 0.75rem;
+      }
+
+      .yes-no {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.6rem;
+      }
+
+      .field {
+        display: grid;
+        gap: 0.3rem;
+        font-size: 0.85rem;
+      }
+
+      .field input,
+      .field textarea {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 2.5rem;
+        padding: 0.4rem 0.6rem;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background-color: var(--surface);
+      }
+
+      .field input {
+        max-width: 12rem;
+      }
+
+      .field input::placeholder,
+      .field textarea::placeholder,
+      .dose-times input::placeholder {
+        color: var(--placeholder);
+        opacity: 1;
+      }
+
+      .checkin-status {
+        min-height: 1.5em;
+        color: var(--muted-text);
+        font-size: 0.85rem;
+      }
+
+      /* Dropdowns */
+      details.dropdown {
+        border: 1px solid var(--border-soft);
+        border-radius: 8px;
+        background-color: var(--surface);
+      }
+
+      details.dropdown > summary {
+        display: flex;
+        min-height: 2.75rem;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: 8px;
+        cursor: pointer;
+        list-style: none;
+      }
+
+      details.dropdown > summary::-webkit-details-marker {
+        display: none;
+      }
+
+      details.dropdown[open] > summary {
+        border-bottom: 1px solid var(--border-soft);
+        border-radius: 8px 8px 0 0;
+      }
+
+      @media (hover: hover) {
+        details.dropdown > summary:hover {
+          background-color: var(--surface-muted);
+        }
+      }
+
+      details.dropdown > summary > .icon:last-child {
+        transition: transform 150ms ease;
+      }
+
+      details.dropdown:not([open]) > summary > .icon:last-child {
+        transform: rotate(180deg);
+      }
+
+      .summary-text {
+        display: grid;
+        flex: 1;
+        min-width: 0;
+        gap: 0.1rem;
+      }
+
+      .summary-title {
+        font-weight: 500;
+      }
+
+      .summary-title-lg {
+        font-size: 1.25rem;
+        line-height: 1.3;
+      }
+
+      .summary-hint {
+        color: var(--muted-text);
+        font-size: 0.8rem;
+      }
+
+      .dropdown-body {
+        display: grid;
+        gap: 1rem;
+        padding: 1rem;
+        font-size: 0.875rem;
+      }
+
+      .dropdown-body > .source-chip {
+        justify-self: start;
+      }
+
+      .dropdown-body.muted-body {
+        gap: 0.5rem;
+        border-radius: 0 0 8px 8px;
+        background-color: var(--surface-muted);
+      }
+
+      details.dropdown.panel {
+        display: block;
+        padding: 0;
+        border-radius: 10px;
+      }
+
+      details.dropdown.panel > summary {
+        min-height: 3.5rem;
+        padding: 0.9rem 1.25rem;
+        border-radius: 10px;
+      }
+
+      details.dropdown.panel[open] > summary {
+        border-radius: 10px 10px 0 0;
+      }
+
+      details.dropdown.panel > .dropdown-body {
+        padding: 1.25rem;
+        font-size: 1rem;
+      }
+
+      details.dropdown.compact {
+        border-color: transparent;
+        background-color: transparent;
+      }
+
+      details.dropdown.compact > summary {
+        min-height: 2.25rem;
+        padding: 0.25rem 0;
+      }
+
+      details.dropdown.compact[open] > summary {
+        border-bottom-color: currentColor;
+      }
+
+      @media (hover: hover) {
+        details.dropdown.compact > summary:hover {
+          background-color: transparent;
+          text-decoration: underline;
+        }
+      }
+
+      details.dropdown.compact > .dropdown-body {
+        gap: 0.6rem;
+        padding: 0.6rem 0 0;
+        font-size: inherit;
+      }
+
+      .med-schedule-list {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .med-status-group {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      .group-title {
+        color: var(--muted-text);
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .schedule {
+        display: grid;
+        gap: 0.5rem;
+        margin: 0;
+      }
+
+      .schedule div {
+        display: grid;
+        grid-template-columns: 6rem minmax(0, 1fr);
+        gap: 1rem;
+        align-items: center;
+        min-height: 2.5rem;
+        padding: 0.4rem 0.75rem;
+        border-radius: 6px;
+        background-color: var(--surface-muted);
+      }
+
+      .schedule dt {
+        font-size: 0.75rem;
+        color: var(--muted-text);
+      }
+
+      .schedule dd {
+        margin: 0;
+      }
+
+      .schedule dd.missing {
+        color: var(--muted-text);
+      }
+
+      .note {
+        display: flex;
+        gap: 0.6rem;
+        padding: 0.75rem;
+        border-radius: 6px;
+        background-color: var(--surface-strong);
+        font-size: 0.85rem;
+      }
+
+      .note .icon {
+        margin-top: 0.2em;
+        color: var(--link);
+      }
+
+      .note.light {
+        background-color: var(--surface-muted);
+      }
+
+      /* Follow-up tasks */
+      .task-list {
+        display: grid;
+        gap: 0.6rem;
+      }
+
+      .task {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background-color: var(--surface);
+        cursor: pointer;
+      }
+
+      .task:has(input:checked) {
+        border-color: transparent;
+        background-color: var(--surface-strong);
+      }
+
+      .task input {
+        width: 1.1rem;
+        height: 1.1rem;
+        flex: none;
+        accent-color: var(--link);
+      }
+
+      .task-title {
+        font-size: 0.95rem;
+        font-weight: 500;
+      }
+
+      .task-detail {
+        color: var(--muted-text);
+        font-size: 0.8rem;
+      }
+
+      /* Footer actions */
+      .action-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+        align-items: start;
+      }
+
+      .footer-note {
+        display: grid;
+        gap: 0.4rem;
+        padding: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background-color: var(--surface);
+        font-size: 0.8rem;
+      }
+
+      .footer-note h2 {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+      }
+
+      .footer-note p {
+        color: var(--muted-text);
+      }
+
+      .footer-note.emergency {
+        border-color: transparent;
+        background-color: var(--warning-surface);
+        color: var(--warning-text);
+      }
+
+      .footer-note.emergency p {
+        color: var(--warning-text);
+      }
+
+      .load-error {
+        padding: 1rem;
+        border: 1px solid var(--error);
+        border-radius: 6px;
+        background-color: var(--surface);
+        color: var(--error);
+      }
+
+      @media (max-width: 60rem) {
+        .layout {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .sidebar {
+          position: static;
+        }
+
+        .med-row {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .med-row legend,
+        .med-row .dose-times {
+          grid-column: 1 / -1;
+        }
+      }
+
+      @media (max-width: 40rem) {
+        .bar-content,
+        .layout {
+          width: calc(100% - 2rem);
+        }
+
+        .utility-bar .bar-content {
+          flex-direction: column;
+          align-items: start;
+          gap: 0.25rem;
+          padding-block: 0.5rem;
+        }
+
+        .site-header .bar-content {
+          padding-block: 0.75rem;
+        }
+
+        .page-intro {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .intro-actions {
+          grid-column: 1;
+          grid-row: auto;
+          grid-template-columns: repeat(2, max-content);
+        }
+
+        .page-intro h1 {
+          font-size: 1.6rem;
+        }
+
+        .action-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .schedule div {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 0.1rem;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg aria-hidden="true" style="display: none">
+      <symbol id="icon-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+      <symbol id="icon-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01"/></symbol>
+      <symbol id="icon-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+      <symbol id="icon-chevron" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
+      <symbol id="icon-doc" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></symbol>
+      <symbol id="icon-phone" viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></symbol>
+      <symbol id="icon-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><path d="M14 5h6M14 9h6M4 15h6M4 19h6M14 15h6M14 19h6"/></symbol>
+      <symbol id="icon-chat" viewBox="0 0 24 24"><path d="M4 5h12v9H8l-4 3z"/><path d="M16 9h4v9l-3-2h-7v-2"/></symbol>
+      <symbol id="icon-calendar" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/></symbol>
+      <symbol id="icon-sprout" viewBox="0 0 24 24"><path d="M12 20v-9M12 11c0-3 2-5 6-5 0 3-2 5-6 5ZM12 13c0-3-2-5-6-5 0 3 2 5 6 5Z"/></symbol>
+      <symbol id="icon-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    </svg>
+
+    <div class="utility-bar">
+      <div class="bar-content">
+        <p>Homeward · Built around the journey home</p>
+        <nav class="utility-links" aria-label="Utility">
+          <a href="#">Privacy notice</a>
+          <a href="#">Patient support</a>
+        </nav>
+      </div>
+    </div>
+
+    <header class="site-header">
+      <div class="bar-content">
+        <div class="brand">
+          <a class="logo" href="/recoveryPlan.html">
+            <span class="logo-mark"><svg class="icon" aria-hidden="true"><use href="#icon-sprout"/></svg></span>
+            homeward
+          </a>
+          <span class="product-label">Document-based recovery plan demo</span>
+          <span class="tag" data-demo-only>Demo patient</span>
+        </div>
+        <div class="account">
+          <a class="help-link" href="#">
+            <svg class="icon" aria-hidden="true"><use href="#icon-help"/></svg>
+            Help &amp; support
+          </a>
+          <span class="account-name">
+            <span class="avatar" aria-hidden="true" data-field="patient.initials"></span>
+            <span data-field="patient.shortName"></span>
+          </span>
+        </div>
+      </div>
+    </header>
+
+
+    <div class="layout">
+      <aside class="sidebar" aria-label="Patient summary">
+        <section class="sidebar-section" aria-labelledby="patient-heading">
+          <p id="patient-heading" class="eyebrow">Patient</p>
+          <p class="patient-name" data-field="patient.name"></p>
+          <details class="dropdown compact">
+            <summary>
+              <span class="summary-text"><span class="summary-title">Visit details</span></span>
+              <svg class="icon" aria-hidden="true"><use href="#icon-chevron"/></svg>
+            </summary>
+            <div class="dropdown-body">
+              <p class="muted" data-field="patient.caseTitle"></p>
+              <div>
+                <p class="eyebrow">Discharge visit</p>
+                <p data-field="discharge.dateLabel"></p>
+                <p class="muted" data-field="discharge.diagnoses"></p>
+              </div>
+              <div>
+                <p class="eyebrow">Preferred summary language</p>
+                <p data-field="patient.preferredLanguage"></p>
+              </div>
+            </div>
+          </details>
+        </section>
+
+        <a class="progress-card" href="#checkin-section" data-opens="checkin-section">
+          <span>Daily check-in <span id="progress-text"></span></span>
+          <span class="progress-track"><span id="progress-fill" class="progress-fill" style="width: 0%"></span></span>
+        </a>
+
+        <nav class="side-nav" aria-label="Recovery plan">
+          <a href="#" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#icon-grid"/></svg>Overview</a>
+          <a href="#"><svg class="icon" aria-hidden="true"><use href="#icon-chat"/></svg>Chat</a>
+          <a href="#"><svg class="icon" aria-hidden="true"><use href="#icon-calendar"/></svg>My plan</a>
+        </nav>
+
+        <section class="warning-panel" aria-labelledby="warning-heading">
+          <div class="warning-header">
+            <h2 id="warning-heading">Seek medical attention if you experience</h2>
+            <span class="tag" data-field="warningSigns.sourcePage" data-format="page"></span>
+          </div>
+          <p>These symptoms are from the discharge document, page <span data-field="warningSigns.sourcePage"></span>.</p>
+          <ul id="warning-symptoms"></ul>
+          <p class="callout-box">
+            <svg class="icon" aria-hidden="true"><use href="#icon-phone"/></svg>
+            <strong data-field="warningSigns.emergency"></strong>
+          </p>
+          <p class="callout-box subtle">
+            <svg class="icon" aria-hidden="true"><use href="#icon-info"/></svg>
+            <span data-field="warningSigns.contactTeam"></span>
+          </p>
+        </section>
+      </aside>
+
+      <main class="content" id="plan" aria-busy="true">
+        <section class="page-intro" aria-labelledby="page-title">
+          <p class="eyebrow">Document-based recovery plan</p>
+          <h1 id="page-title">Your recovery plan</h1>
+          <details class="dropdown compact intro-dropdown">
+            <summary>
+              <span class="summary-text"><span class="summary-title">About this plan</span></span>
+              <svg class="icon" aria-hidden="true"><use href="#icon-chevron"/></svg>
+            </summary>
+            <div class="dropdown-body">
+              <p data-field="intro"></p>
+            </div>
+          </details>
+          <div class="intro-actions">
+            <a class="button-outline" href="#">
+              <svg class="icon" aria-hidden="true"><use href="#icon-arrow"/></svg>
+              Back to checklist
+            </a>
+            <button id="toggle-all" class="button-outline" type="button">Expand all</button>
+          </div>
+        </section>
+
+        <p id="load-error" class="load-error" role="alert" hidden></p>
+
+        <details id="checkin-section" class="dropdown panel">
+          <summary>
+            <span class="summary-text">
+              <span id="checkin-heading" class="summary-title summary-title-lg">Daily check-in</span>
+              <span id="checkin-hint" class="summary-hint"></span>
+            </span>
+            <span class="tag" data-demo-only>Demo content</span>
+            <svg class="icon" aria-hidden="true"><use href="#icon-chevron"/></svg>
+          </summary>
+          <div class="dropdown-body">
+            <p class="panel-description" data-field="checkIn.description"></p>
+
+            <form id="checkin-form" class="checkin-form" novalidate>
+              <div class="info-row">
+                <svg class="icon" aria-hidden="true" style="color: var(--link)"><use href="#icon-info"/></svg>
+                <span>Daily record</span>
+                <label>Date <input id="record-date" name="record-date" type="date"></label>
+                <label>Measured at <input id="record-time" name="record-time" type="time"></label>
+              </div>
+
+              <details class="dropdown">
+                <summary>
+                  <span class="summary-text">
+                    <span id="meds-question" class="summary-title">Did you take your medications today?</span>
+                    <span id="meds-hint" class="summary-hint"></span>
+                  </span>
+                  <svg class="icon" aria-hidden="true"><use href="#icon-chevron"/></svg>
+                </summary>
+                <div class="dropdown-body muted-body">
+                  <div id="med-list" class="med-list"></div>
+                </div>
+              </details>
+
+              <details class="dropdown">
+                <summary>
+                  <span class="summary-text">
+                    <span id="weight-question" class="summary-title">Did you weigh yourself?</span>
+                    <span id="weight-hint" class="summary-hint"></span>
+                  </span>
+                  <svg class="icon" aria-hidden="true"><use href="#icon-chevron"/></svg>
+                </summary>
+                <div class="dropdown-body">
+                  <div class="yes-no" role="radiogroup" aria-labelledby="weight-question">
+                    <label class="choice choice-primary"><input type="radio" name="weighed" value="yes">Yes</label>
+                    <label class="choice"><input type="radio" name="weighed" value="no">No</label>
+                  </div>
+                  <label class="field">
+                    Weight value
+                    <input id="weight-value" name="weight-value" type="text" inputmode="decimal" placeholder="e.g. 172 lb">
+                  </label>
+                  <label class="field">
+                    Symptoms today
+                    <textarea id="symptoms" name="symptoms" rows="3" placeholder="Describe any new or changed symptoms"></textarea>
+                  </label>
+                </div>
+              </details>
+
+              <p id="checkin-status" class="checkin-status" role="status" aria-live="polite"></p>
+            </form>
+          </div>
+        </details>
+
+        <details class="dropdown panel">
+          <summary>
+            <span class="summary-text">
+              <span id="medications-heading" class="summary-title summary-title-lg">Medications</span>
+              <span id="medications-hint" class="summary-hint"></span>
+            </span>
+            <span class="tag" data-demo-only>Demo content</span>
+            <svg class="icon" aria-hidden="true"><use href="#icon-chevron"/></svg>
+          </summary>
+          <div class="dropdown-body">
+            <span class="source-chip" data-source-page="medications.sourcePage"></span>
+            <div id="med-schedule-list" class="med-schedule-list"></div>
+            <details class="dropdown">
+              <summary>
+                <span class="summary-text">
+                  <span class="summary-title" data-field="medications.stopped.title"></span>
+                  <span id="stopped-hint" class="summary-hint"></span>
+                </span>
+                <svg class="icon" aria-hidden="true"><use href="#icon-chevron"/></svg>
+              </summary>
+              <div id="stopped-list" class="dropdown-body muted-body"></div>
+            </details>
+            <details class="dropdown">
+              <summary>
+                <span class="summary-text">
+                  <span class="summary-title" data-field="medications.teaching.title"></span>
+                  <span id="teaching-hint" class="summary-hint"></span>
+                </span>
+                <svg class="icon" aria-hidden="true"><use href="#icon-chevron"/></svg>
+              </summary>
+              <div id="teaching-list" class="dropdown-body muted-body"></div>
+            </details>
+          </div>
+        </details>
+
+        <details class="dropdown panel">
+          <summary>
+            <span class="summary-text">
+              <span id="followup-heading" class="summary-title summary-title-lg">Follow-up procedures</span>
+              <span id="followup-hint" class="summary-hint"></span>
+            </span>
+            <span class="tag" data-demo-only>Demo content</span>
+            <svg class="icon" aria-hidden="true"><use href="#icon-chevron"/></svg>
+          </summary>
+          <div class="dropdown-body">
+            <span class="source-chip" data-source-page="followUp.sourcePage"></span>
+            <div id="task-list" class="task-list"></div>
+            <details class="dropdown">
+              <summary>
+                <span class="summary-text">
+                  <span class="summary-title">Daily care · From your document</span>
+                  <span id="daily-care-hint" class="summary-hint"></span>
+                </span>
+                <svg class="icon" aria-hidden="true"><use href="#icon-chevron"/></svg>
+              </summary>
+              <div id="daily-care-list" class="dropdown-body muted-body"></div>
+            </details>
+          </div>
+        </details>
+
+        <details class="dropdown panel">
+          <summary>
+            <span class="summary-text">
+              <span id="appointments-heading" class="summary-title summary-title-lg">Appointments to schedule</span>
+              <span id="appointments-hint" class="summary-hint"></span>
+            </span>
+            <span class="tag" data-demo-only>Demo content</span>
+            <svg class="icon" aria-hidden="true"><use href="#icon-chevron"/></svg>
+          </summary>
+          <div class="dropdown-body">
+            <span class="source-chip" data-source-page="appointments.sourcePage"></span>
+            <div id="appointment-list" class="task-list"></div>
+            <p class="note light">
+              <svg class="icon" aria-hidden="true"><use href="#icon-info"/></svg>
+              <span data-field="appointments.note"></span>
+            </p>
+          </div>
+        </details>
+
+        <div class="action-grid">
+          <a class="button-outline" href="#">
+            Prepare questions for my GP
+            <svg class="icon" aria-hidden="true"><use href="#icon-chat"/></svg>
+          </a>
+          <a class="button-outline" href="#">
+            Review discharge sheet
+            <svg class="icon" aria-hidden="true"><use href="#icon-doc"/></svg>
+          </a>
+          <section class="footer-note" aria-labelledby="ai-heading">
+            <h2 id="ai-heading"><svg class="icon" aria-hidden="true"><use href="#icon-info"/></svg>AI limitation</h2>
+            <p>AI can miss details. Check your original document and care team. Not medical advice.</p>
+          </section>
+          <section class="footer-note emergency" aria-labelledby="emergency-heading">
+            <h2 id="emergency-heading"><svg class="icon" aria-hidden="true"><use href="#icon-phone"/></svg>Emergency? Don’t wait for a chat.</h2>
+            <p><span data-field="warningSigns.summary"></span> <span data-field="warningSigns.emergencyShort"></span></p>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      (() => {
+        const main = document.querySelector("#plan");
+        const loadError = document.querySelector("#load-error");
+        const form = document.querySelector("#checkin-form");
+        const checkinStatus = document.querySelector("#checkin-status");
+        const progressText = document.querySelector("#progress-text");
+        const progressFill = document.querySelector("#progress-fill");
+        const toggleAllButton = document.querySelector("#toggle-all");
+
+        function getPath(data, path) {
+          return path.split(".").reduce((value, key) => value?.[key], data);
+        }
+
+        function element(tag, { className, text, attrs } = {}, children = []) {
+          const node = document.createElement(tag);
+          if (className) node.className = className;
+          if (text !== undefined) node.textContent = text;
+          for (const [name, value] of Object.entries(attrs || {})) node.setAttribute(name, value);
+          node.append(...children);
+          return node;
+        }
+
+        function icon(name) {
+          const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          svg.setAttribute("class", "icon");
+          svg.setAttribute("aria-hidden", "true");
+          const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+          use.setAttribute("href", `#icon-${name}`);
+          svg.append(use);
+          return svg;
+        }
+
+        function asList(value) {
+          return Array.isArray(value) ? value : [];
+        }
+
+        function fillList(container, items) {
+          container.replaceChildren(...asList(items).map((item) => element("p", { text: item })));
+        }
+
+        function setText(selector, text) {
+          document.querySelector(selector).textContent = text;
+        }
+
+        function plural(count, word) {
+          return `${count} ${word}${count === 1 ? "" : "s"}`;
+        }
+
+        function renderFields(plan) {
+          for (const node of document.querySelectorAll("[data-field]")) {
+            const value = getPath(plan, node.dataset.field);
+            if (value === undefined || value === null) {
+              node.textContent = "";
+            } else if (node.dataset.format === "page") {
+              node.textContent = `p. ${value}`;
+            } else {
+              node.textContent = Array.isArray(value) ? value.join(" · ") : String(value);
+            }
+          }
+
+          for (const node of document.querySelectorAll("[data-source-page]")) {
+            const page = getPath(plan, node.dataset.sourcePage);
+            node.hidden = page === undefined;
+            node.replaceChildren(icon("doc"), `From your document · p. ${page}`);
+          }
+
+          for (const node of document.querySelectorAll("[data-demo-only]")) {
+            node.hidden = !plan.isDemo;
+          }
+        }
+
+        function renderMedicationCheckIn(medications) {
+          const list = document.querySelector("#med-list");
+          list.replaceChildren(
+            ...medications.map((medication, index) => {
+              const id = medication.id || `medication-${index}`;
+              const doses = Math.max(1, Number(medication.dosesPerDay) || 1);
+              const doseLabel = doses === 1 ? "Time taken" : `Dose ${Array.from({ length: doses }, (_, i) => i + 1).join(" / dose ")} times`;
+              const doseInputs = Array.from({ length: doses }, (_, doseIndex) =>
+                element("input", {
+                  attrs: {
+                    type: "time",
+                    name: `${id}-time-${doseIndex + 1}`,
+                    "aria-label": doses === 1
+                      ? `${medication.label}: time taken`
+                      : `${medication.label}: dose ${doseIndex + 1} time`,
+                  },
+                }),
+              );
+
+              return element("fieldset", { className: "med-row" }, [
+                element("legend", { text: medication.label }),
+                element("label", { className: "choice choice-primary" }, [
+                  element("input", { attrs: { type: "radio", name: id, value: "taken" } }),
+                  "Taken",
+                ]),
+                element("label", { className: "choice" }, [
+                  element("input", { attrs: { type: "radio", name: id, value: "not-taken" } }),
+                  "Not taken",
+                ]),
+                element("div", { className: "dose-times" }, [
+                  element("span", { text: doseLabel, attrs: { "aria-hidden": "true" } }),
+                  ...doseInputs,
+                ]),
+              ]);
+            }),
+          );
+        }
+
+        const scheduleFields = [
+          ["dose", "Dose"],
+          ["route", "Route"],
+          ["frequency", "Frequency / timing"],
+          ["mealInstruction", "Meal instruction"],
+          ["duration", "Duration"],
+        ];
+
+        function renderMedicationSchedule(medication) {
+          const schedule = medication.schedule || {};
+          const hint = schedule.frequency || "";
+          const body = [];
+          if (medication.purpose) body.push(element("p", { text: medication.purpose }));
+          body.push(element("dl", { className: "schedule" },
+            scheduleFields.map(([key, label]) => {
+              const value = schedule[key];
+              return element("div", {}, [
+                element("dt", { text: label }),
+                element("dd", {
+                  className: value ? "" : "missing",
+                  text: value || "Not specified in document",
+                }),
+              ]);
+            }),
+          ));
+          if (medication.note) {
+            body.push(element("p", { className: "note" }, [icon("info"), element("span", { text: medication.note })]));
+          }
+
+          return element("details", { className: "dropdown" }, [
+            element("summary", {}, [
+              element("span", { className: "summary-text" }, [
+                element("span", {
+                  className: "summary-title",
+                  text: [medication.name, schedule.dose].filter(Boolean).join(" "),
+                }),
+                element("span", { className: "summary-hint", text: hint }),
+              ]),
+              icon("chevron"),
+            ]),
+            element("div", { className: "dropdown-body" }, body),
+          ]);
+        }
+
+        function renderMedicationDetails(medications) {
+          const list = asList(medications.list);
+          const statuses = [...new Set(list.map((medication) => medication.status || "Other"))];
+          document.querySelector("#med-schedule-list").replaceChildren(
+            ...statuses.map((status) =>
+              element("section", { className: "med-status-group" }, [
+                element("p", { className: "group-title", text: status === "New" ? "New medications" : status }),
+                ...list
+                  .filter((medication) => (medication.status || "Other") === status)
+                  .map(renderMedicationSchedule),
+              ]),
+            ),
+          );
+
+          const medicationCount = list.length;
+          const stopped = asList(medications.stopped?.items);
+          const teaching = asList(medications.teaching?.items);
+          fillList(document.querySelector("#stopped-list"), stopped);
+          fillList(document.querySelector("#teaching-list"), teaching);
+          setText("#stopped-hint", plural(stopped.length, "item"));
+          setText("#teaching-hint", plural(teaching.length, "note"));
+          setText("#medications-hint", `${plural(medicationCount, "medication")} · ${plural(stopped.length, "stopped or avoided item")}`);
+        }
+
+        function renderFollowUp(followUp) {
+          document.querySelector("#task-list").replaceChildren(
+            ...asList(followUp.tasks).map((task, index) =>
+              element("label", { className: "task" }, [
+                element("input", { attrs: { type: "checkbox", name: `task-${task.id || index}` } }),
+                element("span", {}, [
+                  element("span", { className: "task-title", text: task.title, attrs: { style: "display:block" } }),
+                  element("span", { className: "task-detail", text: task.detail }),
+                ]),
+              ]),
+            ),
+          );
+
+          fillList(document.querySelector("#daily-care-list"), followUp.dailyCare);
+          setText("#daily-care-hint", plural(asList(followUp.dailyCare).length, "instruction"));
+        }
+
+        function renderAppointments(appointments) {
+          document.querySelector("#appointment-list").replaceChildren(
+            ...asList(appointments.items).map((appointment) =>
+              element("details", { className: "dropdown" }, [
+                element("summary", {}, [
+                  element("span", { className: "summary-text" }, [
+                    element("span", { className: "summary-title", text: appointment.title }),
+                  ]),
+                  element("span", { className: "tag tag-warning", text: appointment.status || "Status not provided" }),
+                  icon("chevron"),
+                ]),
+                element("div", { className: "dropdown-body muted-body" },
+                  asList(appointment.details).map((detail, index) =>
+                    element("p", { className: index === 0 ? "muted" : "", text: detail }),
+                  ),
+                ),
+              ]),
+            ),
+          );
+          setText("#appointments-hint", `${plural(asList(appointments.items).length, "appointment")} to arrange`);
+        }
+
+        function updateFollowUp() {
+          const tasks = [...document.querySelectorAll("#task-list input[type='checkbox']")];
+          const checked = tasks.filter((task) => task.checked).length;
+          setText("#followup-hint", `${checked} of ${tasks.length} arranged`);
+        }
+
+        function updateToggleAllLabel() {
+          const dropdowns = [...document.querySelectorAll("details.dropdown")];
+          const allOpen = dropdowns.length > 0 && dropdowns.every((dropdown) => dropdown.open);
+          toggleAllButton.textContent = allOpen ? "Collapse all" : "Expand all";
+          toggleAllButton.setAttribute("aria-expanded", String(allOpen));
+        }
+
+        function updateProgress() {
+          const medicationGroups = [...document.querySelectorAll("#med-list fieldset")];
+          const medsDone = medicationGroups.length > 0
+            && medicationGroups.every((group) => group.querySelector("input[type='radio']:checked"));
+          const weightDone = Boolean(form.querySelector("input[name='weighed']:checked"));
+          const done = Number(medsDone) + Number(weightDone);
+          const total = 2;
+          const medsAnswered = medicationGroups
+            .filter((group) => group.querySelector("input[type='radio']:checked")).length;
+          const weighed = form.querySelector("input[name='weighed']:checked")?.value;
+          progressText.textContent = `${done} of ${total} tasks ready`;
+          setText("#checkin-hint", `${done} of ${total} tasks ready`);
+          setText("#meds-hint", `${medsAnswered} of ${medicationGroups.length} recorded`);
+          setText("#weight-hint", weighed ? `Answered: ${weighed === "yes" ? "Yes" : "No"}` : "Not answered");
+          progressFill.style.width = `${(done / total) * 100}%`;
+          checkinStatus.textContent = done === total
+            ? "Today’s check-in is complete. It stays on this device and is not submitted."
+            : "";
+        }
+
+        function renderPlan(plan) {
+          renderFields(plan);
+          renderMedicationCheckIn(asList(plan.checkIn?.medications));
+          renderMedicationDetails(plan.medications || {});
+          renderFollowUp(plan.followUp || {});
+          renderAppointments(plan.appointments || {});
+          updateToggleAllLabel();
+
+          const symptomList = document.querySelector("#warning-symptoms");
+          symptomList.replaceChildren(
+            ...asList(plan.warningSigns?.symptoms).map((symptom) => element("li", { text: symptom })),
+          );
+
+          updateFollowUp();
+
+          updateProgress();
+        }
+
+        const now = new Date();
+        document.querySelector("#record-date").value = [
+          now.getFullYear(),
+          String(now.getMonth() + 1).padStart(2, "0"),
+          String(now.getDate()).padStart(2, "0"),
+        ].join("-");
+
+        form.addEventListener("change", updateProgress);
+        document.querySelector("#task-list").addEventListener("change", updateFollowUp);
+
+        toggleAllButton.addEventListener("click", () => {
+          const dropdowns = [...document.querySelectorAll("details.dropdown")];
+          const open = !dropdowns.every((dropdown) => dropdown.open);
+          for (const dropdown of dropdowns) dropdown.open = open;
+          updateToggleAllLabel();
+        });
+        document.addEventListener("toggle", updateToggleAllLabel, true);
+
+        for (const link of document.querySelectorAll("[data-opens]")) {
+          link.addEventListener("click", () => {
+            document.getElementById(link.dataset.opens).open = true;
+          });
+        }
+        form.addEventListener("submit", (event) => event.preventDefault());
+
+        fetch("/api/recovery-plan", { headers: { Accept: "application/json" } })
+          .then(async (response) => {
+            const result = await response.json().catch(() => {
+              throw new Error("The server returned an invalid response.");
+            });
+            if (!response.ok) throw new Error(result.error || "The recovery plan could not be loaded.");
+            return result;
+          })
+          .then(renderPlan)
+          .catch((error) => {
+            loadError.textContent = error instanceof TypeError
+              ? "Could not reach the server. Open this page from the running local server and try again."
+              : error.message;
+            loadError.hidden = false;
+            updateProgress();
+          })
+          .finally(() => main.removeAttribute("aria-busy"));
+      })();
+    </script>
+  </body>
+</html>

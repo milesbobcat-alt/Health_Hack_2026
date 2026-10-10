@@ -1,0 +1,263 @@
+{
+  "isDemo": true,
+  "source": {
+    "fileName": "Untitled document-3.pdf"
+  },
+  "patient": {
+    "name": "Name",
+    "shortName": "Example patient",
+    "initials": "EX",
+    "caseTitle": "Example 1 — Acute Decompensated HFrEF With Pneumonia and Acute Kidney Injury",
+    "preferredLanguage": "English"
+  },
+  "discharge": {
+    "dateLabel": "No discharge date supplied",
+    "diagnoses": [
+      "Acute on chronic HFrEF",
+      "community-acquired pneumonia",
+      "acute kidney injury"
+    ]
+  },
+  "intro": "This plan is based on the attached discharge example for a 72-year-old man with heart failure EF 30%, pneumonia, and improved acute kidney injury. Use it to review medications, follow-up steps, and daily care guidance before your next appointment.",
+  "checkIn": {
+    "description": "Record each scheduled dose separately, plus daily weight and symptoms. Follow your discharge instructions; meal timing is not specified.",
+    "medications": [
+      {
+        "id": "furosemide",
+        "label": "Furosemide 40 mg",
+        "dosesPerDay": 1
+      },
+      {
+        "id": "losartan",
+        "label": "Losartan 25 mg",
+        "dosesPerDay": 1
+      },
+      {
+        "id": "empagliflozin",
+        "label": "Empagliflozin 10 mg",
+        "dosesPerDay": 1
+      },
+      {
+        "id": "amoxicillin-clavulanate",
+        "label": "Amoxicillin-clavulanate 875/125 mg",
+        "dosesPerDay": 2
+      },
+      {
+        "id": "metoprolol",
+        "label": "Metoprolol succinate 50 mg",
+        "dosesPerDay": 1
+      },
+      {
+        "id": "apixaban",
+        "label": "Apixaban 5 mg",
+        "dosesPerDay": 2
+      },
+      {
+        "id": "atorvastatin",
+        "label": "Atorvastatin 40 mg",
+        "dosesPerDay": 1
+      },
+      {
+        "id": "metformin",
+        "label": "Metformin 500 mg · only continue if your care team confirms your kidneys are working well enough for this medicine",
+        "dosesPerDay": 2
+      }
+    ]
+  },
+  "warningSigns": {
+    "sourcePage": 2,
+    "symptoms": [
+      "New or worsening shortness of breath, especially at rest",
+      "Chest pain or pressure",
+      "Fainting or severe dizziness",
+      "Rapidly worsening leg or abdominal swelling",
+      "Significant decrease in urine output",
+      "New confusion or severe weakness",
+      "Fever or worsening cough despite antibiotics"
+    ],
+    "summary": "Seek urgent medical attention for new or worsening shortness of breath (especially at rest), chest pain or pressure, fainting or severe dizziness, rapidly worsening leg or abdominal swelling, significantly reduced urine output, new confusion or severe weakness, or fever/worsening cough despite antibiotics.",
+    "emergency": "Severe symptoms or immediate danger — call your local emergency number; do not wait for chat.",
+    "emergencyShort": "Severe symptoms or immediate danger: call your local emergency number.",
+    "contactTeam": "Contact your heart-failure team promptly for rapid weight gain or worsening swelling/breathlessness, following your individualized discharge plan."
+  },
+  "medications": {
+    "sourcePage": 1,
+    "list": [
+      {
+        "id": "furosemide",
+        "name": "Furosemide",
+        "status": "New",
+        "purpose": "For volume management.",
+        "note": null,
+        "schedule": {
+          "dose": "40 mg",
+          "route": "By mouth",
+          "frequency": "Once daily",
+          "mealInstruction": null,
+          "duration": null
+        }
+      },
+      {
+        "id": "losartan",
+        "name": "Losartan",
+        "status": "New",
+        "purpose": "For heart failure and blood pressure.",
+        "note": null,
+        "schedule": {
+          "dose": "25 mg",
+          "route": "By mouth",
+          "frequency": "Once daily",
+          "mealInstruction": null,
+          "duration": null
+        }
+      },
+      {
+        "id": "empagliflozin",
+        "name": "Empagliflozin",
+        "status": "New",
+        "purpose": "For heart failure/diabetes.",
+        "note": null,
+        "schedule": {
+          "dose": "10 mg",
+          "route": "By mouth",
+          "frequency": "Once daily",
+          "mealInstruction": null,
+          "duration": null
+        }
+      },
+      {
+        "id": "amoxicillin-clavulanate",
+        "name": "Amoxicillin-clavulanate",
+        "status": "New",
+        "purpose": "Complete pneumonia treatment.",
+        "note": null,
+        "schedule": {
+          "dose": "875/125 mg",
+          "route": "By mouth",
+          "frequency": "Twice daily",
+          "mealInstruction": null,
+          "duration": "3 additional days"
+        }
+      },
+      {
+        "id": "metoprolol",
+        "name": "Metoprolol succinate",
+        "status": "Continue",
+        "purpose": null,
+        "note": null,
+        "schedule": {
+          "dose": "50 mg",
+          "route": null,
+          "frequency": "Once daily",
+          "mealInstruction": null,
+          "duration": null
+        }
+      },
+      {
+        "id": "apixaban",
+        "name": "Apixaban",
+        "status": "Continue",
+        "purpose": null,
+        "note": null,
+        "schedule": {
+          "dose": "5 mg",
+          "route": null,
+          "frequency": "Twice daily",
+          "mealInstruction": null,
+          "duration": null
+        }
+      },
+      {
+        "id": "atorvastatin",
+        "name": "Atorvastatin",
+        "status": "Continue",
+        "purpose": null,
+        "note": null,
+        "schedule": {
+          "dose": "40 mg",
+          "route": null,
+          "frequency": "Nightly",
+          "mealInstruction": null,
+          "duration": null
+        }
+      },
+      {
+        "id": "metformin",
+        "name": "Metformin",
+        "status": "Continue",
+        "purpose": null,
+        "note": "Only continue if your care team confirms your kidneys are working well enough to keep taking it.",
+        "schedule": {
+          "dose": "500 mg",
+          "route": null,
+          "frequency": "Twice daily",
+          "mealInstruction": null,
+          "duration": null
+        }
+      }
+    ],
+    "stopped": {
+      "title": "Stopped / held / avoid",
+      "items": [
+        "Lisinopril — discontinued; changed to losartan.",
+        "Spironolactone — held pending repeat renal function and potassium.",
+        "Ibuprofen/other NSAIDs — avoid due to heart failure and recent kidney injury unless specifically approved by your treating clinician."
+      ]
+    },
+    "teaching": {
+      "title": "Nursing teaching",
+      "items": [
+        "Furosemide increases urination; discuss earlier-in-day timing when possible. This is teaching guidance, not an additional dosing instruction.",
+        "Apixaban: review bleeding precautions and notify clinicians about new medications."
+      ]
+    }
+  },
+  "followUp": {
+    "sourcePage": 2,
+    "tasks": [
+      {
+        "id": "bmp",
+        "title": "Arrange a basic metabolic panel",
+        "detail": "Before or at early outpatient follow-up to reassess creatinine and potassium."
+      },
+      {
+        "id": "primary-care",
+        "title": "Arrange primary-care follow-up",
+        "detail": "Within approximately 1 week of discharge. Scheduling status not provided."
+      },
+      {
+        "id": "cardiology",
+        "title": "Arrange cardiology follow-up",
+        "detail": "Within approximately 1 week of discharge. Scheduling status not provided."
+      }
+    ],
+    "dailyCare": [
+      "Weigh yourself at approximately the same time each morning; record weight and symptoms.",
+      "Low-sodium diet: approximately 2 grams of sodium daily.",
+      "Follow fluid recommendations from your heart-failure team; no numeric fluid limit is supplied.",
+      "Finish the entire antibiotic course even if feeling better."
+    ]
+  },
+  "appointments": {
+    "sourcePage": 2,
+    "items": [
+      {
+        "title": "Primary-care follow-up",
+        "status": "Status not provided",
+        "details": [
+          "Within approximately 1 week of discharge. No discharge date or booked appointment is supplied.",
+          "Basic metabolic panel before or at early follow-up: creatinine and potassium."
+        ]
+      },
+      {
+        "title": "Cardiology follow-up",
+        "status": "Status not provided",
+        "details": [
+          "Within approximately 1 week of discharge. Scheduling status not provided.",
+          "Confirm follow-up appointments and laboratory testing with your care team."
+        ]
+      }
+    ],
+    "note": "Contact your heart-failure team promptly for rapid weight gain or worsening swelling/breathlessness, following your individualized discharge plan. No numeric weight-gain threshold is supplied."
+  }
+}

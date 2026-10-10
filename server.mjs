@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -87,6 +87,7 @@ export function createAppServer({
   voiceId = process.env.ELEVENLABS_VOICE_ID,
   fetchImpl = fetch,
   maxAudioBytes = defaultMaxAudioBytes,
+  recoveryPlanPath = resolve(projectDirectory, "examplePlan.json"),
 } = {}) {
   return createHttpServer(async (request, response) => {
     const url = new URL(request.url, "http://localhost");
@@ -95,6 +96,7 @@ export function createAppServer({
       "/": "nurseIntake.html",
       "/nurseIntake.html": "nurseIntake.html",
       "/ptView.html": "ptView.html",
+      "/recoveryPlan.html": "recoveryPlan.html",
     };
     if (request.method === "GET" && pageFiles[url.pathname]) {
       try {
@@ -109,6 +111,22 @@ export function createAppServer({
         createReadStream(pagePath).pipe(response);
       } catch {
         sendJson(response, 500, { error: "The nurse intake page could not be loaded." });
+      }
+      return;
+    }
+
+    if (url.pathname === "/api/recovery-plan") {
+      if (request.method !== "GET") {
+        response.setHeader("Allow", "GET");
+        sendJson(response, 405, { error: "Use GET to load the recovery plan." });
+        return;
+      }
+
+      try {
+        const plan = JSON.parse(await readFile(recoveryPlanPath, "utf8"));
+        sendJson(response, 200, plan);
+      } catch {
+        sendJson(response, 500, { error: "The recovery plan could not be loaded." });
       }
       return;
     }
