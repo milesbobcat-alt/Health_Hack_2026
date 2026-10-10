@@ -1,3 +1,4 @@
+import { createFhirClient, DEFAULT_FHIR_BASE_URL } from "./fhir.mjs";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
@@ -87,7 +88,11 @@ export function createAppServer({
   voiceId = process.env.ELEVENLABS_VOICE_ID,
   fetchImpl = fetch,
   maxAudioBytes = defaultMaxAudioBytes,
+  fhirBaseUrl = process.env.FHIR_BASE_URL || DEFAULT_FHIR_BASE_URL,
+  fhirFetchImpl = fetch,
+  fhirTimeoutMs = 15000,
 } = {}) {
+  const fhir = createFhirClient({ baseUrl: fhirBaseUrl, fetchImpl: fhirFetchImpl, timeoutMs: fhirTimeoutMs });
   return createHttpServer(async (request, response) => {
     const url = new URL(request.url, "http://localhost");
 
@@ -95,6 +100,7 @@ export function createAppServer({
       "/": "nurseIntake.html",
       "/nurseIntake.html": "nurseIntake.html",
       "/ptView.html": "ptView.html",
+      "/patient-state.mjs": "patient-state.mjs",
     };
     if (request.method === "GET" && pageFiles[url.pathname]) {
       try {
@@ -103,12 +109,47 @@ export function createAppServer({
         response.writeHead(200, {
           "Cache-Control": "no-store",
           "Content-Length": pageInfo.size,
-          "Content-Type": "text/html; charset=utf-8",
+          "Content-Type": url.pathname.endsWith(".mjs") ? "text/javascript; charset=utf-8" : "text/html; charset=utf-8",
           "X-Content-Type-Options": "nosniff",
         });
         createReadStream(pagePath).pipe(response);
       } catch {
         sendJson(response, 500, { error: "The nurse intake page could not be loaded." });
+      }
+      return;
+    }
+
+    if (url.pathname === "/api/patients" || url.pathname.startsWith("/api/patients/")) {
+      if (request.method !== "GET") {
+        response.setHeader("Allow", "GET");
+        sendJson(response, 405, { error: "Use GET to search or select patients." });
+        return;
+      }
+      try {
+        let result;
+        if (url.pathname === "/api/patients") {
+          if ([...url.searchParams.keys()].some(key => !["name", "cursor"].includes(key)) ||
+              url.searchParams.getAll("name").length > 1 || url.searchParams.getAll("cursor").length > 1) {
+            sendJson(response, 400, { error: "Provide only a name or a results-page cursor." });
+            return;
+          }
+          result = await fhir.searchPatients({
+            name: url.searchParams.get("name") ?? undefined,
+            cursor: url.searchParams.get("cursor") ?? undefined,
+          });
+        } else {
+          if (url.search) {
+            sendJson(response, 400, { error: "Patient retrieval does not accept query parameters." });
+            return;
+          }
+          const medicationPath = url.pathname.match(/^\/api\/patients\/([^/]+)\/medication-(statements|requests)$/);
+          result = medicationPath
+            ? await (medicationPath[2] === 'requests' ? fhir.getMedicationRequests(medicationPath[1]) : fhir.getMedicationStatements(medicationPath[1]))
+            : await fhir.getPatient(url.pathname.slice("/api/patients/".length));
+        }
+        sendJson(response, 200, result);
+      } catch (error) {
+        sendJson(response, error.status || 502, { error: error.status ? error.message : "The FHIR sandbox request failed. Please try again." });
       }
       return;
     }
