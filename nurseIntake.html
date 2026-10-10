@@ -112,6 +112,28 @@
         cursor: not-allowed;
       }
 
+      .recording-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        justify-content: center;
+      }
+
+      .recording-status {
+        min-height: 1.5em;
+        margin: 0;
+        color: var(--muted-text);
+      }
+
+      .recording-status[data-state="recording"] {
+        color: var(--error);
+        font-weight: 600;
+      }
+
+      .recording-status[data-state="error"] {
+        color: var(--error);
+      }
+
       textarea {
         box-sizing: border-box;
         width: 100%;
@@ -264,6 +286,10 @@
         font-size: 1rem;
       }
 
+      .privacy-note p {
+        margin-block: 0 0.5em;
+      }
+
       @media (max-width: 48rem) {
         .header-content,
         main {
@@ -310,9 +336,12 @@
           <h2 id="record-heading">Record audio</h2>
           <p class="card-description">Speak the care instructions you want to add.</p>
           <div class="recording-placeholder">
-            <span class="coming-soon">Coming soon</span>
-            <p>Audio recording is not available yet. No audio will be captured.</p>
-            <button type="button" disabled>Start recording</button>
+            <p id="recording-help">Allow microphone access, then record the care instructions.</p>
+            <div class="recording-actions">
+              <button id="start-recording" type="button" aria-describedby="recording-help">Start recording</button>
+              <button id="stop-recording" type="button" disabled>Stop and transcribe</button>
+            </div>
+            <p id="recording-status" class="recording-status" role="status" aria-live="polite" data-state="idle"></p>
           </div>
         </section>
 
@@ -326,7 +355,190 @@
         </section>
       </div>
 
-      <p class="privacy-note">This prototype does not submit or save pasted text.</p>
+      <div class="privacy-note">
+        <p>Audio is sent to ElevenLabs for transcription. This app does not save recordings.</p>
+        <p>Only record information approved for your organization's privacy requirements, and review the transcript for accuracy.</p>
+        <p>Pasted text remains in this page and is not submitted.</p>
+      </div>
     </main>
+    <script>
+      (() => {
+        const maxRecordingBytes = 25 * 1024 * 1024;
+        const startButton = document.querySelector("#start-recording");
+        const stopButton = document.querySelector("#stop-recording");
+        const transcriptField = document.querySelector("#emr-text");
+        const status = document.querySelector("#recording-status");
+
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recordingSize = 0;
+        let recordingTooLarge = false;
+        let microphoneStream = null;
+
+        function setStatus(message, state = "idle") {
+          status.textContent = message;
+          status.dataset.state = state;
+        }
+
+        function stopMicrophoneTracks() {
+          microphoneStream?.getTracks().forEach((track) => track.stop());
+          microphoneStream = null;
+        }
+
+        function resetControls() {
+          startButton.disabled = false;
+          stopButton.disabled = true;
+          document.querySelector(".source-card[aria-labelledby='record-heading']")
+            .removeAttribute("aria-busy");
+        }
+
+        function appendTranscript(text) {
+          const currentText = transcriptField.value;
+          transcriptField.value = currentText
+            ? `${currentText.trimEnd()}\n\n${text}`
+            : text;
+          transcriptField.dispatchEvent(new Event("input", { bubbles: true }));
+          transcriptField.focus();
+          transcriptField.setSelectionRange(
+            transcriptField.value.length,
+            transcriptField.value.length,
+          );
+        }
+
+        async function transcribeRecording(blob) {
+          setStatus("Uploading audio for transcription. Please wait.");
+          startButton.disabled = true;
+          stopButton.disabled = true;
+          document.querySelector(".source-card[aria-labelledby='record-heading']")
+            .setAttribute("aria-busy", "true");
+
+          try {
+            const response = await fetch("/api/transcribe", {
+              method: "POST",
+              headers: {
+                "Content-Type": blob.type || "audio/webm",
+              },
+              body: blob,
+            });
+            let result;
+            try {
+              result = await response.json();
+            } catch {
+              throw new Error("The server returned an invalid response.");
+            }
+            if (!response.ok) {
+              throw new Error(result.error || "Transcription failed. Please try again.");
+            }
+            if (typeof result.text !== "string" || !result.text.trim()) {
+              throw new Error("No speech was recognized. Try recording again.");
+            }
+
+            appendTranscript(result.text.trim());
+            setStatus("Transcription added to care instructions. Review it for accuracy.");
+          } catch (error) {
+            setStatus(
+              error instanceof TypeError
+                ? "Could not reach the transcription server. Open this page from the running local server and try again."
+                : error.message,
+              "error",
+            );
+          } finally {
+            resetControls();
+          }
+        }
+
+        function finishRecording() {
+          stopMicrophoneTracks();
+
+          if (recordingTooLarge) {
+            audioChunks = [];
+            resetControls();
+            setStatus("Recording exceeded the 25 MB limit and was not uploaded.", "error");
+            return;
+          }
+
+          const audioBlob = new Blob(audioChunks, {
+            type: mediaRecorder.mimeType || audioChunks[0]?.type || "audio/webm",
+          });
+          audioChunks = [];
+
+          if (audioBlob.size === 0) {
+            resetControls();
+            setStatus("No audio was recorded. Please try again.", "error");
+            return;
+          }
+
+          void transcribeRecording(audioBlob);
+        }
+
+        async function startRecording() {
+          if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+            setStatus("Audio recording is not supported by this browser.", "error");
+            return;
+          }
+
+          startButton.disabled = true;
+          setStatus("Requesting microphone access.");
+
+          try {
+            microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mimeType = [
+              "audio/webm;codecs=opus",
+              "audio/webm",
+              "audio/ogg;codecs=opus",
+              "audio/mp4",
+            ].find((type) => MediaRecorder.isTypeSupported(type));
+            mediaRecorder = mimeType
+              ? new MediaRecorder(microphoneStream, { mimeType })
+              : new MediaRecorder(microphoneStream);
+            audioChunks = [];
+            recordingSize = 0;
+            recordingTooLarge = false;
+
+            mediaRecorder.addEventListener("dataavailable", (event) => {
+              if (!event.data.size || recordingTooLarge) return;
+              recordingSize += event.data.size;
+              if (recordingSize > maxRecordingBytes) {
+                recordingTooLarge = true;
+                setStatus("Recording reached the 25 MB limit. Stopping without uploading.", "error");
+                mediaRecorder.stop();
+                return;
+              }
+              audioChunks.push(event.data);
+            });
+            mediaRecorder.addEventListener("stop", finishRecording, { once: true });
+            mediaRecorder.addEventListener("error", () => {
+              stopMicrophoneTracks();
+              resetControls();
+              setStatus("The recording failed. Please try again.", "error");
+            }, { once: true });
+            mediaRecorder.start(1000);
+            stopButton.disabled = false;
+            setStatus("Recording. Select Stop and transcribe when finished.", "recording");
+          } catch (error) {
+            stopMicrophoneTracks();
+            resetControls();
+            setStatus(
+              error.name === "NotAllowedError" || error.name === "SecurityError"
+                ? "Microphone access was denied. Allow microphone access in your browser and try again."
+                : "Could not start the microphone. Check that it is connected and try again.",
+              "error",
+            );
+          }
+        }
+
+        startButton.addEventListener("click", () => {
+          void startRecording();
+        });
+
+        stopButton.addEventListener("click", () => {
+          if (mediaRecorder?.state === "recording") {
+            stopButton.disabled = true;
+            setStatus("Stopping recording.");
+            mediaRecorder.stop();
+          }
+        });
+      })();
+    </script>
   </body>
 </html>
