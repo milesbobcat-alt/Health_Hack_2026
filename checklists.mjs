@@ -2,6 +2,13 @@ import { randomBytes } from "node:crypto";
 
 const DAY = 24 * 60 * 60 * 1000;
 const MAX_AGE = 30 * DAY;
+function repeatIntervalDays(frequency = "") {
+  const interval = frequency.match(/\bevery\s+(\d+)\s+(day|week)s?\b/i);
+  if (interval) return Number(interval[1]) * (interval[2].toLowerCase() === "week" ? 7 : 1);
+  if (/\b(?:weekly|every week)\b/i.test(frequency)) return 7;
+  if (/\b(?:daily|every day|each day|each morning|every morning|each evening|every evening|each night|every night|nightly|times daily)\b/i.test(frequency)) return 1;
+  return 0;
+}
 
 export function createChecklistStore({ now = Date.now, send = async () => {}, reminderIntervalMs = DAY } = {}) {
   const plans = new Map();
@@ -11,23 +18,25 @@ export function createChecklistStore({ now = Date.now, send = async () => {}, re
   }
 
   function publicPlan(plan) {
-    refreshDailyItems(plan);
+    refreshRecurringItems(plan);
     return {
       id: plan.id,
       createdAt: plan.createdAt,
       expiresAt: plan.expiresAt,
-      items: plan.items.map(({ text, category, frequency, done }) => ({
-        text, category: ["routine", "followup", "other"].includes(category) ? "care" : category, frequency, done,
+      items: plan.items.map(({ text, category, name, description, strength, dose, frequency, timing, due, done }) => ({
+        text, category: ["routine", "followup", "other"].includes(category) ? "care" : category,
+        name, description, strength, dose, frequency, timing, due, done,
       })),
       warnings: [...plan.warnings],
       medicationChanges: { before: [...plan.medicationChanges.before], after: [...plan.medicationChanges.after] },
     };
   }
 
-  function refreshDailyItems(plan) {
-    const today = new Date(now()).toISOString().slice(0, 10);
+  function refreshRecurringItems(plan) {
+    const currentTime = now();
     for (const item of plan.items) {
-      if (item.frequency === "daily" && item.completedOn !== today) item.done = false;
+      const intervalDays = repeatIntervalDays(item.frequency);
+      if (intervalDays && item.completedOn && currentTime - Date.parse(item.completedOn) >= intervalDays * DAY) item.done = false;
     }
   }
 
@@ -40,8 +49,10 @@ export function createChecklistStore({ now = Date.now, send = async () => {}, re
     if (!Array.isArray(items) || !items.length || items.length > 30 ||
         items.some((item) => {
           const text = typeof item === "string" ? item : item?.text;
+          const optionalFields = ["name", "description", "strength", "dose", "frequency", "timing", "due"];
           return typeof text !== "string" || !text.trim() || text.length > 500 ||
-            (typeof item !== "string" && (!item || !["medication", "care", "testing", "avoid", "routine", "followup", "other"].includes(item.category) || !["once", "daily"].includes(item.frequency)));
+            (typeof item !== "string" && (!item || !["medication", "care", "testing", "avoid", "routine", "followup", "other"].includes(item.category) ||
+              optionalFields.some((field) => item[field] !== undefined && (typeof item[field] !== "string" || item[field].length > 200))));
         })) {
       throw new Error("Enter 1 to 30 reviewed checklist items, each under 500 characters.");
     }
@@ -58,7 +69,12 @@ export function createChecklistStore({ now = Date.now, send = async () => {}, re
       expiresAt: createdAt + MAX_AGE,
       items: items.map((item) => typeof item === "string"
         ? ({ text: item.trim(), category: "other", frequency: "once", done: false, completedOn: null })
-        : ({ text: item.text.trim(), category: ["routine", "followup", "other"].includes(item.category) ? "care" : item.category, frequency: item.frequency, done: false, completedOn: null })),
+        : ({
+          text: item.text.trim(), category: ["routine", "followup", "other"].includes(item.category) ? "care" : item.category,
+          name: item.name?.trim() || "", description: item.description?.trim() || "", strength: item.strength?.trim() || "",
+          dose: item.dose?.trim() || "", frequency: item.frequency?.trim() || "", timing: item.timing?.trim() || "", due: item.due?.trim() || "",
+          done: false, completedOn: null,
+        })),
       warnings: warnings.map((warning) => warning.trim()),
       medicationChanges: { before: medicationChanges.before.map((entry) => entry.trim()), after: medicationChanges.after.map((entry) => entry.trim()) },
       phone: needsPhone ? phone : null, email: needsEmail ? email : null,
@@ -80,13 +96,13 @@ export function createChecklistStore({ now = Date.now, send = async () => {}, re
     purge();
     const plan = plans.get(id);
     if (!plan) return null;
-    refreshDailyItems(plan);
+    refreshRecurringItems(plan);
     if (!Number.isInteger(index) || index < 0 || index >= plan.items.length || typeof done !== "boolean") {
       throw new Error("Invalid checklist update.");
     }
     plan.items[index].done = done;
-    if (plan.items[index].frequency === "daily") {
-      plan.items[index].completedOn = done ? new Date(now()).toISOString().slice(0, 10) : null;
+    if (repeatIntervalDays(plan.items[index].frequency)) {
+      plan.items[index].completedOn = done ? new Date(now()).toISOString() : null;
     }
     return publicPlan(plan);
   }
@@ -94,7 +110,7 @@ export function createChecklistStore({ now = Date.now, send = async () => {}, re
   async function dispatchDue(baseUrl) {
     purge();
     for (const plan of plans.values()) {
-      refreshDailyItems(plan);
+      refreshRecurringItems(plan);
       if (plan.nextReminderAt > now() || plan.items.every((item) => item.done)) continue;
       // Advance before awaiting delivery so a slow provider cannot duplicate a reminder.
       plan.nextReminderAt = plan.reminders ? now() + reminderIntervalMs : Infinity;

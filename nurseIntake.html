@@ -389,16 +389,25 @@
       .consent-row { display: flex; align-items: flex-start; gap: .5rem; margin: .75rem 0; }
       #workflow-status { margin: .6rem 0; color: var(--muted-text); font-size: .9rem; overflow-wrap: anywhere; }
       .review-group { margin: 1rem 0; padding: .9rem; border: 1px solid #dbe4f0; border-radius: 10px; background: #f7f9fc; }
-      .review-group h3 { margin: 0 0 .55rem; color: #294b82; font-size: 1rem; }
-      .step-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .55rem; margin: .55rem 0; padding: .75rem; border: 1px solid #dbe4f0; border-radius: 9px; background: #fff; }
-      .step-card > input { width: 100%; }
-      .step-meta { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .55rem; }
-      .step-meta label { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: .45rem; color: #53657e; font-size: .82rem; }
+      .review-group h3 { margin: 0 0 .65rem; color: #294b82; font-size: 1.25rem; }
+      .review-group-largest h3 { font-size: 1.55rem; }
+      .review-group-care h3 { font-size: 1.55rem; }
+      .step-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .65rem; margin: .65rem 0; padding: .85rem; border: 1px solid #dbe4f0; border-radius: 9px; background: #fff; }
+      .step-category { grid-column: 1 / -1; display: block; }
+      .step-category label { display: grid; gap: .3rem; color: #53657e; font-size: .8rem; font-weight: 700; }
+      .step-category select { appearance: none; width: 100%; min-height: 3.6rem; padding: .65rem 3rem .65rem .9rem; border: 2px solid #315fc4; border-radius: 10px; background-color: #fff; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none' stroke='%23315fc4' stroke-width='2'%3E%3Cpath d='m5 7 5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .9rem center; color: #244ba0; font: inherit; font-size: 1.35rem; font-weight: 750; cursor: pointer; }
+      .step-category-care select { min-height: 4rem; font-size: 1.55rem; }
+      .step-category select:hover { background-color: #f2f6ff; }
+      .step-category select:focus-visible { outline: 3px solid #8eb4ff; outline-offset: 2px; }
+      .step-fields { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .65rem; }
+      .step-fields label { display: grid; gap: .25rem; color: #53657e; font-size: .82rem; }
+      .step-fields label:first-child { grid-column: 1 / -1; }
+      .step-fields input { width: 100%; }
       .source-trace { grid-column: 1 / -1; margin: 0; color: #58677c; font-size: .82rem; }
       .source-trace summary { width: fit-content; color: #315fc4; cursor: pointer; }
       .source-trace p { margin: .35rem 0 0; }
       .quiet-button { width: fit-content; min-height: 2.4rem; padding: .4rem .7rem; border: 1px solid #b9c9df; border-radius: 8px; background: white; color: #2853a0; font-size: .85rem; }
-      .step-card > .quiet-button { grid-column: 2; grid-row: 1; }
+      .step-card > .quiet-button { grid-column: 2; }
       .warning-card { display: flex; gap: .5rem; align-items: center; margin: .5rem 0; padding: .6rem; border: 1px solid #e4c6c3; border-left: 3px solid #bf4b45; border-radius: 8px; background: white; }
       .warning-card input { flex: 1; }
       .medication-panel { margin: .9rem 0; padding: .9rem; border: 1px solid #dbe4f0; border-radius: 9px; background: #fff; }
@@ -1147,6 +1156,57 @@
             const people = match[1].split(/,\s*and\s+|,\s*|\s+and\s+/i).map((part) => part.trim()).filter(Boolean);
             return people.length > 1 && people.length <= 4 ? people.map((person) => `Follow up with ${person} ${match[2]}`) : [text];
           }
+          function frequencyFrom(text) {
+            return text.match(/\b(?:once|twice|three times|four times)\s+(?:a|per)\s+day\b|\b(?:once|twice|three times|four times)\s+daily\b|\bevery\s+\d+\s+(?:hours?|days?|weeks?|months?)\b|\b(?:daily|each day|every day|each morning|every morning|each evening|every evening|each night|every night|nightly|weekly|every week|as needed|at bedtime)\b/i)?.[0] || "";
+          }
+          function dueFrom(text) {
+            const approximate = "(?:(?:approximately|approx\\.?|about|around|roughly)\\s+)?";
+            const quantity = "(?:\\d+|one|two|three|four|five|six|seven|eight|nine|ten)";
+            const unit = "(?:days?|weeks?|months?)";
+            const deadline = new RegExp(`\\b(?:by|within|no later than|on or before|due(?:\\s+(?:by|within|on))?|before)\\s+${approximate}(?:the\\s+)?(?:(?:next|this)\\s+)?(?:today|tomorrow|${quantity}(?:\\s+${unit})?|\\d{1,2}(?:st|nd|rd|th)?(?:\\s+of)?\\s+[a-z]+|[a-z]+\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}[/-]\\d{1,2}(?:[/-]\\d{2,4})?|monday|tuesday|wednesday|thursday|friday|saturday|sunday|week|month)\\b|\\bin\\s+${approximate}${quantity}\\s+${unit}\\b|\\b(?:today|tomorrow|next week|next month)\\b`, "i");
+            return text.match(deadline)?.[0] || "";
+          }
+          function timingFrom(text) {
+            return text.match(/\b(?:at|before|after|with)\s+(?:\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?|breakfast|lunch|dinner|bedtime|your next appointment)\b|\b(?:in the morning|in the evening|in the afternoon|at bedtime)\b/i)?.[0] || "";
+          }
+          function nameFrom(text, category, strength, dose, frequency, timing, due) {
+            let name = text.replace(/^\s*(?:take|start|begin|continue|resume|use|inject|apply|complete|get|have|schedule|repeat|obtain)\s+/i, "");
+            if (category === "medication") {
+              name = name.replace(/^(?:(?:\d+(?:\.\d+)?|one|two|three|four|a|an)\s+(?:tablets?|capsules?|puffs?|drops?|patches?|mL|ml|units?)\s+(?:of\s+)?)/i, "");
+              const strengthIndex = strength ? name.toLowerCase().indexOf(strength.toLowerCase()) : -1;
+              if (strengthIndex >= 0) name = name.slice(0, strengthIndex);
+              else if (frequency) {
+                const frequencyIndex = name.toLowerCase().indexOf(frequency.toLowerCase());
+                if (frequencyIndex > 0) name = name.slice(0, frequencyIndex);
+              }
+              if (dose && name.toLowerCase().startsWith(dose.toLowerCase())) name = name.slice(dose.length);
+            }
+            for (const phrase of [frequency, timing, due].filter(Boolean)) name = name.replace(new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), "");
+            return name.replace(/[\s,;:.–-]+$/, "").trim() || text;
+          }
+          function descriptionFrom(text, frequency, timing, due) {
+            let description = text;
+            const start = [frequency, timing, due].filter(Boolean).map((value) => description.toLowerCase().indexOf(value.toLowerCase())).filter((index) => index > 0).sort((a, b) => a - b)[0];
+            if (start !== undefined) description = description.slice(0, start);
+            return description.replace(/[\s,;:.–-]+$/, "").trim() || text;
+          }
+          function itemFromText(sourceText, rawText) {
+            const text = rawText.replace(/\.$/, "");
+            const category = classify(text);
+            const strength = category === "medication" ? text.match(/\b\d+(?:\.\d+)?\s?(?:mg|mcg|µg|g|ml|mL|units?|%)\b/i)?.[0] || "" : "";
+            const dose = category === "medication" ? text.match(/\b(?:take|use|inject)\s+((?:\d+(?:\.\d+)?|one|two|three|four|a|an)\s+(?:tablets?|capsules?|puffs?|drops?|patches?|mL|ml|units?))\b/i)?.[1] || "" : "";
+            const frequency = frequencyFrom(text);
+            const due = dueFrom(text);
+            const timing = timingFrom(text);
+            const name = ["medication", "testing"].includes(category) ? nameFrom(text, category, strength, dose, frequency, timing, due) : "";
+            return {
+              text, category,
+              name,
+              description: category === "care" ? descriptionFrom(text, frequency, timing, due) : category === "avoid" ? text : "",
+              strength, dose, frequency, timing, due,
+              source: sourceText, done: false,
+            };
+          }
           const steps = getBullets("Discharge Instructions", /^\s*(?:Return Precautions|Warning Signs|Nursing Discharge Teaching|Example\s+\d+)\b/i);
           const sourceSteps = steps.length ? steps : source.split(/\r?\n/).map((line) => line.replace(/^\s*(?:[•*-]|\d+[.)])\s*/, "").trim()).filter(Boolean);
           function medicationList(heading) {
@@ -1171,11 +1231,7 @@
             after: medicationList(/^(?:Discharge Medications?|Discharge Medication List|Medications at Discharge|Medications on Discharge|Medication List at Discharge|Medication Changes at Discharge)\s*:?\s*$/i),
           };
           return {
-            items: sourceSteps.flatMap((sourceText) => splitFollowUp(sourceText).map((text) => ({
-              text: text.replace(/\.$/, ""), category: classify(text),
-              frequency: /\b(daily|each day|each morning|every day|every morning|once daily|twice daily|nightly|four times daily)\b/i.test(text) ? "daily" : "once",
-              source: sourceText, done: false,
-            }))),
+            items: sourceSteps.flatMap((sourceText) => splitFollowUp(sourceText).map((text) => itemFromText(sourceText, text))),
             warnings: [
               ...getBullets("Return Precautions", /^\s*(?:Warning Signs|Nursing Discharge Teaching|Example\s+\d+)\b/i),
               ...getBullets("Warning Signs", /^\s*(?:Return Precautions|Nursing Discharge Teaching|Example\s+\d+)\b/i),
@@ -1185,34 +1241,64 @@
         }
         function renderDraft() {
           draftList.replaceChildren();
+          const largestCategorySize = Math.max(0, ...Object.keys(groupNames).map((category) =>
+            draft.items.filter((item) => item.category === category).length
+          ));
           for (const [category, name] of Object.entries(groupNames)) {
             const indices = draft.items.map((item, index) => item.category === category ? index : -1).filter((index) => index >= 0);
             if (!indices.length) continue;
-            const group = document.createElement("section"); group.className = "review-group";
+            const group = document.createElement("section");
+            group.className = `review-group${category === "care" ? " review-group-care" : ""}${indices.length === largestCategorySize && largestCategorySize > 1 ? " review-group-largest" : ""}`;
             const heading = document.createElement("h3"); heading.textContent = `${name} · ${indices.length}`; group.append(heading);
             for (const index of indices) {
               const item = draft.items[index];
               const card = document.createElement("div"); card.className = "step-card";
-              const input = document.createElement("input"); input.value = item.text; input.setAttribute("aria-label", `Step ${index + 1}`);
-              input.addEventListener("input", () => { item.text = input.value; });
-              const meta = document.createElement("div"); meta.className = "step-meta";
-              const categoryLabel = document.createElement("label"); categoryLabel.textContent = "Category";
+              const categoryHeader = document.createElement("div"); categoryHeader.className = `step-category${category === "care" ? " step-category-care" : ""}`;
+              const categoryLabel = document.createElement("label"); categoryLabel.append(document.createTextNode("Change category"));
               const categorySelect = document.createElement("select");
               for (const [key, label] of Object.entries(groupNames)) categorySelect.add(new Option(label, key));
               categorySelect.value = item.category;
-              categorySelect.addEventListener("change", () => { item.category = categorySelect.value; renderDraft(); });
+              categorySelect.addEventListener("change", () => {
+                item.category = categorySelect.value;
+                if (["medication", "testing"].includes(item.category) && !item.name) item.name = item.text || item.source || "";
+                if (["care", "avoid"].includes(item.category) && !item.description) item.description = item.text || item.source || "";
+                renderDraft();
+              });
               categoryLabel.append(categorySelect);
-              const timingLabel = document.createElement("label"); timingLabel.textContent = "Timing";
-              const timingSelect = document.createElement("select"); timingSelect.add(new Option("As directed", "once")); timingSelect.add(new Option("Daily", "daily"));
-              timingSelect.value = item.frequency; timingSelect.addEventListener("change", () => { item.frequency = timingSelect.value; }); timingLabel.append(timingSelect);
-              meta.append(categoryLabel, timingLabel);
+              categoryHeader.append(categoryLabel);
+
+              const fields = document.createElement("div"); fields.className = "step-fields";
+              const definitions = {
+                medication: [
+                  ["name", "Medication name", "Enter the medication name"],
+                  ["strength", "Strength", "For example, 500 mg"],
+                  ["dose", "Dose", "For example, 1 tablet"],
+                  ["frequency", "Frequency", "For example, twice daily or every 7 days"],
+                  ["timing", "Time", "For example, 8:00 PM"],
+                  ["due", "Due", "For example, by next week"],
+                ],
+                care: [["description", "Description", "Describe the care step"], ["frequency", "Frequency", "For example, daily or every 7 days"], ["due", "Due", "For example, within 3 days"]],
+                testing: [["name", "Test name", "For example, blood test"], ["frequency", "Frequency", "For example, every 7 days"], ["timing", "Timing", "For example, before breakfast"], ["due", "Due", "For example, by next week"]],
+                avoid: [["description", "Description", "Describe what to avoid"]],
+              };
+              for (const [key, labelText, placeholder] of definitions[item.category] || definitions.care) {
+                const label = document.createElement("label"); label.textContent = labelText;
+                const input = document.createElement("input"); input.type = "text"; input.value = item[key] || ""; input.placeholder = placeholder;
+                input.setAttribute("aria-label", `${labelText} for step ${index + 1}`);
+                input.addEventListener("input", () => {
+                  item[key] = input.value;
+                  const primary = ["medication", "testing"].includes(item.category) ? item.name : item.description;
+                  if (primary?.trim()) item.text = primary.trim();
+                });
+                label.append(input); fields.append(label);
+              }
               const source = document.createElement("details"); source.className = "source-trace";
               const sourceLabel = document.createElement("summary"); sourceLabel.textContent = "View source wording";
               const sourceText = document.createElement("p"); sourceText.textContent = item.source || "Added by reviewer";
               source.append(sourceLabel, sourceText);
               const remove = document.createElement("button"); remove.type = "button"; remove.className = "quiet-button"; remove.textContent = "Remove step";
               remove.addEventListener("click", () => { draft.items.splice(index, 1); renderDraft(); });
-              card.append(input, meta, source, remove); group.append(card);
+              card.append(categoryHeader, fields, source, remove); group.append(card);
             }
             draftList.append(group);
           }
@@ -1260,7 +1346,7 @@
           document.querySelector("#add-step").hidden = false;
           document.querySelector("#create-checklist").disabled = !draft.items.length;
         }
-        document.querySelector("#add-step").addEventListener("click", () => { draft.items.push({ text: "", category: "care", frequency: "once", source: "" }); renderDraft(); });
+        document.querySelector("#add-step").addEventListener("click", () => { draft.items.push({ text: "", description: "", category: "care", frequency: "", timing: "", due: "", source: "" }); renderDraft(); });
         document.querySelector("#make-checklist").addEventListener("click", () => {
           document.querySelector("#create-checklist").disabled = true;
           const selected = transcriptField.value.slice(transcriptField.selectionStart, transcriptField.selectionEnd);
@@ -1290,7 +1376,14 @@
 
         document.querySelector("#create-checklist").addEventListener("click", async () => {
           const version = draftVersion;
-          const items = draft.items.map(({ text, category, frequency }) => ({ text: text.trim(), category, frequency }));
+          const items = draft.items.map((item) => {
+            const primary = ["medication", "testing"].includes(item.category) ? item.name : item.description;
+            return { ...item, text: (primary || item.text || "").trim() };
+          });
+          if (items.some((item) => !item.text)) {
+            workflowStatus.textContent = "Add a name or description to every checklist item before sharing.";
+            return;
+          }
           const button = document.querySelector("#create-checklist");
           button.disabled = true;
           workflowStatus.textContent = "Creating checklist…";

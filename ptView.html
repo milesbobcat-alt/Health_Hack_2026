@@ -23,6 +23,7 @@
     .task input { width:1.25rem; height:1.25rem; margin:.08rem 0 0; flex:none; accent-color:#315fc4; }
     .task span { display:block; font-size:1rem; font-weight:550; }
     .task small { display:inline-block; margin-top:.2rem; color:#617087; font-size:.78rem; }
+    .task .task-details { display:flex; flex-wrap:wrap; gap:.25rem .65rem; margin-top:.3rem; color:#617087; font-size:.82rem; font-weight:400; }
     .task.done span { color:#748196; text-decoration:line-through; }
     .warnings { border-left:3px solid #b23b3b; background:#fff; }
     .warnings h2 { margin-bottom:.45rem; }
@@ -79,9 +80,26 @@
       for (const {item,index} of entries) {
         const label = document.createElement("label"); label.className = `task${item.done ? " done" : ""}`;
         const checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.checked = item.done;
-        const content = document.createElement("div"); const text = document.createElement("span"); text.textContent = item.text;
+        const content = document.createElement("div"); const text = document.createElement("span");
+        text.textContent = ["medication", "testing"].includes(category) ? (item.name || item.text) : (item.description || item.text);
         content.append(text);
-        if (item.frequency === "daily") { const timing = document.createElement("small"); timing.textContent = "Daily"; content.append(timing); }
+        const details = [];
+        if (category === "medication") {
+          if (item.strength) details.push(["Strength", item.strength]);
+          if (item.dose) details.push(["Dose", item.dose]);
+          if (item.frequency) details.push(["Frequency", item.frequency]);
+          if (item.timing) details.push(["Time", item.timing]);
+          if (item.due) details.push(["Due", item.due]);
+        } else if (category === "care" || category === "testing") {
+          if (item.frequency) details.push(["Frequency", item.frequency]);
+          if (item.timing) details.push(["Timing", item.timing]);
+          if (item.due) details.push(["Due", item.due]);
+        }
+        if (details.length) {
+          const detailList = document.createElement("div"); detailList.className = "task-details";
+          for (const [label, value] of details) { const detail = document.createElement("span"); detail.textContent = `${label}: ${value}`; detailList.append(detail); }
+          content.append(detailList);
+        }
         label.append(checkbox,content); section.append(label);
         checkbox.addEventListener("change", async () => {
           checkbox.disabled = true;
