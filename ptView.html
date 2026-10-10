@@ -248,6 +248,59 @@
         color: #ffffff;
       }
 
+      main {
+        width: min(100% - 2rem, 52rem);
+        margin-inline: auto;
+        padding-block: 2rem;
+      }
+
+      .patient-card {
+        display: grid;
+        gap: 1rem;
+        padding: 1.5rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background-color: var(--surface);
+      }
+
+      .patient-card h1,
+      .patient-card p {
+        margin: 0;
+      }
+
+      .tabs,
+      .playback-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+
+      [role="tab"] {
+        background: var(--surface);
+        color: var(--link);
+      }
+
+      [role="tabpanel"] {
+        padding-block: 1rem;
+      }
+
+      #patient-data {
+        width: 100%;
+        min-height: 15rem;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .patient-status {
+        min-height: 1.5em;
+        color: var(--muted-text);
+      }
+
+      .patient-status[data-state="error"] {
+        color: var(--error);
+      }
+
       @media (prefers-reduced-motion: reduce) {
         *,
         *::before,
@@ -262,173 +315,133 @@
   </head>
   <body>
     <main>
-      <section aria-labelledby="patient-information-heading">
-        <h1 id="patient-information-heading">Patient information</h1>
-        <p>Transferred patient information will appear below. Review it before listening.</p>
+      <section class="patient-card" aria-labelledby="patient-information-heading">
+        <h1 id="patient-information-heading">Your discharge instructions</h1>
+        <p id="load-status" class="patient-status" role="status" aria-live="polite">Loading your discharge information…</p>
 
-        <label for="patient-data">Patient information</label>
-        <textarea
-          id="patient-data"
-          name="patient-data"
-          rows="12"
-          maxlength="5000"
-          aria-describedby="speech-privacy-note"
-          placeholder="Patient information will appear here"
-        ></textarea>
-
-        <p id="speech-privacy-note">
-          Read aloud sends this text to the configured ElevenLabs account to generate audio.
-          Use this only if your organization has approved sending this information to that service.
-        </p>
-
-        <label for="speech-approval">
-          <input id="speech-approval" type="checkbox">
-          I confirm this text is approved for processing by ElevenLabs.
-        </label>
-
-        <div>
-          <button id="read-aloud" type="button">Read aloud</button>
-          <button id="stop-reading" type="button" disabled>Stop reading</button>
+        <div class="tabs" role="tablist" aria-label="Discharge information">
+          <button id="document-tab" type="button" role="tab" aria-selected="true" aria-controls="document-panel">Discharge document</button>
+          <button id="transcript-tab" type="button" role="tab" aria-selected="false" aria-controls="transcript-panel" tabindex="-1">Nurse transcript</button>
         </div>
 
-        <p id="speech-status" role="status" aria-live="polite"></p>
-        <audio id="patient-audio" controls preload="none" hidden></audio>
+        <section id="document-panel" role="tabpanel" aria-labelledby="document-tab">
+          <h2>Original discharge document</h2>
+          <p>Open or download the PDF provided by your care team.</p>
+          <a id="pdf-link" class="button" target="_blank" rel="noopener noreferrer" hidden>View or download discharge PDF</a>
+        </section>
+
+        <section id="transcript-panel" role="tabpanel" aria-labelledby="transcript-tab" hidden>
+          <h2>Nurse transcript</h2>
+          <p id="patient-data" aria-live="polite">Your instructions will appear here.</p>
+          <div class="playback-actions">
+            <button id="read-aloud" type="button" disabled>Play Out Loud</button>
+            <button id="stop-reading" type="button" disabled>Stop playback</button>
+          </div>
+          <p id="speech-status" class="patient-status" role="status" aria-live="polite"></p>
+        </section>
       </section>
     </main>
 
     <script>
       (() => {
         const patientData = document.querySelector("#patient-data");
-        const approval = document.querySelector("#speech-approval");
+        const loadStatus = document.querySelector("#load-status");
+        const pdfLink = document.querySelector("#pdf-link");
+        const documentTab = document.querySelector("#document-tab");
+        const transcriptTab = document.querySelector("#transcript-tab");
+        const documentPanel = document.querySelector("#document-panel");
+        const transcriptPanel = document.querySelector("#transcript-panel");
         const readButton = document.querySelector("#read-aloud");
         const stopButton = document.querySelector("#stop-reading");
-        const status = document.querySelector("#speech-status");
-        const audioPlayer = document.querySelector("#patient-audio");
-        let audioUrl = null;
+        const speechStatus = document.querySelector("#speech-status");
+        let transcript = "";
 
-        function setStatus(message) {
-          status.textContent = message;
+        function setStatus(element, message, state = "idle") {
+          element.textContent = message;
+          element.dataset.state = state;
         }
 
-        function getSpeechErrorMessage(result) {
-          const providerMessages = {
-            400: "ElevenLabs could not process this request. Check the selected voice and speech model.",
-            401: "ElevenLabs rejected the API key. Check ELEVENLABS_API_KEY in the server's environment, then restart the server.",
-            402: "The ElevenLabs account needs an active plan or additional credits for text-to-speech.",
-            403: "The ElevenLabs API key does not have permission to use text-to-speech.",
-            404: "The configured ElevenLabs voice was not found. Check ELEVENLABS_VOICE_ID.",
-            422: "ElevenLabs could not use this text, voice, or model combination. Check the voice ID and model settings.",
-            429: "The ElevenLabs account has reached a rate or usage limit. Check your plan and try again later.",
-          };
-
-          if (providerMessages[result.providerStatus]) {
-            return `${providerMessages[result.providerStatus]} (Provider status: ${result.providerStatus})`;
-          }
-
-          return result.error || "Speech generation failed. Please try again.";
+        function selectTab(selectedTab) {
+          const showTranscript = selectedTab === transcriptTab;
+          documentTab.setAttribute("aria-selected", String(!showTranscript));
+          transcriptTab.setAttribute("aria-selected", String(showTranscript));
+          documentTab.tabIndex = showTranscript ? -1 : 0;
+          transcriptTab.tabIndex = showTranscript ? 0 : -1;
+          documentPanel.hidden = showTranscript;
+          transcriptPanel.hidden = !showTranscript;
         }
 
-        function clearAudioUrl() {
-          if (audioUrl) {
-            URL.revokeObjectURL(audioUrl);
-            audioUrl = null;
+        async function loadDischarge() {
+          const dischargeId = new URLSearchParams(window.location.search).get("id");
+          if (!dischargeId) {
+            setStatus(loadStatus, "This patient link is missing its discharge ID.", "error");
+            return;
           }
-          audioPlayer.removeAttribute("src");
-          audioPlayer.hidden = true;
-          audioPlayer.load();
+
+          try {
+            const response = await fetch(`/api/discharge/${encodeURIComponent(dischargeId)}`);
+            const result = await response.json();
+            if (!response.ok) {
+              throw new Error(result.error || "Discharge information could not be loaded.");
+            }
+            transcript = result.transcript || "";
+            patientData.textContent = transcript || "No transcript was provided.";
+            if (result.pdfUrl) {
+              pdfLink.href = result.pdfUrl;
+              pdfLink.download = result.pdfOriginalName || "discharge.pdf";
+              pdfLink.textContent = `View or download ${result.pdfOriginalName || "discharge PDF"}`;
+              pdfLink.hidden = false;
+            } else {
+              documentTab.hidden = true;
+              selectTab(transcriptTab);
+            }
+            setStatus(loadStatus, "Your discharge information is ready.");
+            readButton.disabled = !transcript || !("speechSynthesis" in window);
+          } catch (error) {
+            setStatus(loadStatus, error instanceof TypeError
+              ? "Could not connect to the discharge server. Check your connection and refresh this page."
+              : error.message, "error");
+          }
         }
 
         function stopReading() {
-          audioPlayer.pause();
-          audioPlayer.currentTime = 0;
+          if ("speechSynthesis" in window) window.speechSynthesis.cancel();
           stopButton.disabled = true;
-          readButton.disabled = false;
+          readButton.disabled = !transcript || !("speechSynthesis" in window);
         }
 
-        readButton.addEventListener("click", async () => {
-          const text = patientData.value.trim();
-          if (!text) {
-            setStatus("There is no patient information to read aloud.");
-            patientData.focus();
+        documentTab.addEventListener("click", () => selectTab(documentTab));
+        transcriptTab.addEventListener("click", () => selectTab(transcriptTab));
+        readButton.addEventListener("click", () => {
+          if (!transcript || !("speechSynthesis" in window)) {
+            setStatus(speechStatus, "Audio playback is not available in this browser.", "error");
             return;
           }
-          if (!approval.checked) {
-            setStatus("Confirm that your organization approves sending this text to ElevenLabs.");
-            approval.focus();
-            return;
-          }
-
-          clearAudioUrl();
           readButton.disabled = true;
-          stopButton.disabled = true;
-          setStatus("Generating audio. Please wait.");
-
-          try {
-            const response = await fetch("/api/speak", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ text }),
-            });
-
-            if (!response.ok) {
-              let result;
-              try {
-                result = await response.json();
-              } catch {
-                throw new Error("The server returned an invalid response.");
-              }
-              throw new Error(getSpeechErrorMessage(result));
-            }
-
-            const audio = await response.blob();
-            if (!audio.size) {
-              throw new Error("The speech service returned empty audio.");
-            }
-            audioUrl = URL.createObjectURL(audio);
-            audioPlayer.src = audioUrl;
-            audioPlayer.hidden = false;
-            try {
-              await audioPlayer.play();
-              setStatus("Playing generated audio.");
-            } catch {
-              readButton.disabled = false;
-              setStatus("Audio is ready. Press Play on the audio player to listen.");
-            }
-          } catch (error) {
-            setStatus(
-              error instanceof TypeError
-                ? "Could not reach the speech server. Open this page from the running local server and try again."
-                : error.message,
-            );
+          stopButton.disabled = false;
+          setStatus(speechStatus, "Playing discharge instructions.");
+          const utterance = new SpeechSynthesisUtterance(transcript);
+          utterance.addEventListener("end", () => {
+            stopButton.disabled = true;
             readButton.disabled = false;
-          }
+            setStatus(speechStatus, "Playback finished.");
+          });
+          utterance.addEventListener("error", () => {
+            stopButton.disabled = true;
+            readButton.disabled = false;
+            setStatus(speechStatus, "Audio playback could not be completed.", "error");
+          });
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(utterance);
         });
 
         stopButton.addEventListener("click", () => {
           stopReading();
-          setStatus("Playback stopped.");
+          setStatus(speechStatus, "Playback stopped.");
         });
 
-        audioPlayer.addEventListener("play", () => {
-          readButton.disabled = true;
-          stopButton.disabled = false;
-          setStatus("Playing generated audio.");
-        });
-
-        audioPlayer.addEventListener("pause", () => {
-          if (!audioPlayer.ended) {
-            stopButton.disabled = true;
-            readButton.disabled = false;
-          }
-        });
-
-        audioPlayer.addEventListener("ended", () => {
-          stopButton.disabled = true;
-          readButton.disabled = false;
-          setStatus("Playback finished.");
-        });
-
-        window.addEventListener("pagehide", clearAudioUrl);
+        window.addEventListener("pagehide", stopReading);
+        void loadDischarge();
       })();
     </script>
   </body>

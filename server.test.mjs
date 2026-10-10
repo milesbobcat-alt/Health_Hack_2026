@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { createAppServer } from "./server.mjs";
+import { createAppServer, handler } from "./index.mjs";
 
 const runningServers = new Set();
 
@@ -31,6 +31,20 @@ afterEach(async () => {
         }),
     ),
   );
+});
+
+test("exports an API Gateway-compatible Lambda handler", async () => {
+  const response = await handler({
+    httpMethod: "GET",
+    path: "/",
+    headers: { host: "example.com" },
+    requestContext: { stage: "test" },
+    isBase64Encoded: false,
+  }, {});
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.headers["content-type"], /text\/html/);
+  assert.match(response.body, /Add care instructions/);
 });
 
 test("transcribes audio through ElevenLabs without returning provider data", async () => {
@@ -124,6 +138,7 @@ test("serves the intake page from the root path", async () => {
   assert.match(page, /Add care instructions/);
   assert.match(page, /id="start-recording"/);
   assert.match(page, /\/api\/transcribe/);
+  assert.match(page, /id="submit-discharge"/);
 });
 
 test("serves the patient view page with read-aloud controls", async () => {
@@ -131,7 +146,226 @@ test("serves the patient view page with read-aloud controls", async () => {
   const response = await fetch(`${url}/ptView.html`);
 
   assert.equal(response.status, 200);
-  assert.match(await response.text(), /id="patient-data"/);
+  const page = await response.text();
+  assert.match(page, /id="patient-data"/);
+  assert.match(page, /Play Out Loud/);
+  assert.match(page, /\/api\/discharge\//);
+});
+
+test("uploads discharge PDF and persists the matching 30-day DynamoDB record", async () => {
+  const calls = [];
+  const fixedNow = Date.parse("2026-10-10T12:00:00.000Z");
+  const { url } = await startServer({
+    tableName: "Discharges",
+    bucketName: "discharge-pdfs",
+    idGenerator: () => "test-discharge-id",
+    now: () => fixedNow,
+    s3Client: {
+      send: async (command) => calls.push({ service: "s3", command }),
+    },
+    dynamoClient: {
+      send: async (command) => calls.push({ service: "dynamodb", command }),
+    },
+  });
+
+  const form = new FormData();
+  form.append("transcript", "  Take medication with food.  ");
+  form.append("pdfFile", new Blob(["%PDF test document"], { type: "application/pdf" }), "aftercare.pdf");
+  const response = await fetch(`${url}/api/discharge`, { method: "POST", body: form });
+
+  assert.equal(response.status, 201);
+  assert.deepEqual(await response.json(), {
+    dischargeId: "test-discharge-id",
+    patientLink: "/ptView.html?id=test-discharge-id",
+  });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].service, "s3");
+  assert.equal(calls[0].command.input.Bucket, "discharge-pdfs");
+  assert.equal(calls[0].command.input.Key, "discharges/test-discharge-id/aftercare.pdf");
+  assert.equal(calls[0].command.input.ContentType, "application/pdf");
+  assert.equal(calls[0].command.input.Body.toString(), "%PDF test document");
+  assert.equal(calls[1].service, "dynamodb");
+  assert.deepEqual(calls[1].command.input, {
+    TableName: "Discharges",
+    Item: {
+      dischargeId: "test-discharge-id",
+      createdAt: "2026-10-10T12:00:00.000Z",
+      expiresAt: Math.floor(fixedNow / 1000) + 30 * 24 * 60 * 60,
+      transcript: "Take medication with food.",
+      pdfKey: "discharges/test-discharge-id/aftercare.pdf",
+      pdfOriginalName: "aftercare.pdf",
+    },
+  });
+});
+
+test("saves a transcript and generates a patient link without requiring a PDF or S3", async () => {
+  let saveCommand;
+  const { url } = await startServer({
+    tableName: "Discharges",
+    idGenerator: () => "transcript-only-id",
+    dynamoClient: {
+      send: async (command) => {
+        saveCommand = command;
+      },
+    },
+    s3Client: { send: async () => assert.fail("Transcript-only submissions must not access S3.") },
+  });
+  const form = new FormData();
+  form.append("transcript", "Drink plenty of fluids.");
+
+  const response = await fetch(`${url}/api/discharge`, { method: "POST", body: form });
+  assert.equal(response.status, 201);
+  assert.deepEqual(await response.json(), {
+    dischargeId: "transcript-only-id",
+    patientLink: "/ptView.html?id=transcript-only-id",
+  });
+  assert.equal(saveCommand.input.TableName, "Discharges");
+  assert.equal(saveCommand.input.Item.transcript, "Drink plenty of fluids.");
+  assert.equal("pdfKey" in saveCommand.input.Item, false);
+});
+
+test("fetches a discharge record and signs its PDF download URL", async () => {
+  let readCommand;
+  let signingCommand;
+  let signingOptions;
+  const { url } = await startServer({
+    tableName: "Discharges",
+    bucketName: "discharge-pdfs",
+    now: () => Date.parse("2026-10-10T12:00:00.000Z"),
+    dynamoClient: {
+      send: async (command) => {
+        readCommand = command;
+        return {
+          Item: {
+            dischargeId: "patient-123",
+            expiresAt: Math.floor(Date.parse("2026-10-10T12:00:00.000Z") / 1000) + 10,
+            transcript: "Rest and drink water.",
+            pdfKey: "discharges/patient-123/aftercare.pdf",
+            pdfOriginalName: "aftercare.pdf",
+          },
+        };
+      },
+    },
+    s3Client: { send: async () => assert.fail("GET should use a signed URL, not fetch the PDF.") },
+    getSignedUrlImpl: async (client, command, options) => {
+      assert.ok(client);
+      signingCommand = command;
+      signingOptions = options;
+      return "https://signed.example/download";
+    },
+  });
+
+  const response = await fetch(`${url}/api/discharge/patient-123`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    dischargeId: "patient-123",
+    transcript: "Rest and drink water.",
+    pdfUrl: "https://signed.example/download",
+    pdfOriginalName: "aftercare.pdf",
+  });
+  assert.deepEqual(readCommand.input, {
+    TableName: "Discharges",
+    Key: { dischargeId: "patient-123" },
+  });
+  assert.deepEqual(signingCommand.input, {
+    Bucket: "discharge-pdfs",
+    Key: "discharges/patient-123/aftercare.pdf",
+  });
+  assert.deepEqual(signingOptions, { expiresIn: 3600 });
+});
+
+test("loads a transcript-only discharge without requiring S3", async () => {
+  const { url } = await startServer({
+    tableName: "Discharges",
+    dynamoClient: {
+      send: async () => ({
+        Item: {
+          dischargeId: "transcript-only-id",
+          expiresAt: Math.floor(Date.now() / 1000) + 60,
+          transcript: "Drink plenty of fluids.",
+        },
+      }),
+    },
+    s3Client: { send: async () => assert.fail("Transcript-only records must not access S3.") },
+    getSignedUrlImpl: async () => assert.fail("Transcript-only records must not be signed."),
+  });
+
+  const response = await fetch(`${url}/api/discharge/transcript-only-id`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    dischargeId: "transcript-only-id",
+    transcript: "Drink plenty of fluids.",
+  });
+});
+
+test("does not serve missing or expired discharge records", async () => {
+  const fixedNow = Date.parse("2026-10-10T12:00:00.000Z");
+  let item;
+  const { url } = await startServer({
+    tableName: "Discharges",
+    bucketName: "discharge-pdfs",
+    now: () => fixedNow,
+    dynamoClient: { send: async () => ({ Item: item }) },
+    s3Client: { send: async () => assert.fail("Expired or missing record must not access S3.") },
+    getSignedUrlImpl: async () => assert.fail("Expired or missing record must not be signed."),
+  });
+
+  const missing = await fetch(`${url}/api/discharge/missing`);
+  assert.equal(missing.status, 404);
+  item = { dischargeId: "expired", expiresAt: Math.floor(fixedNow / 1000) - 1 };
+  const expired = await fetch(`${url}/api/discharge/expired`);
+  assert.equal(expired.status, 404);
+});
+
+test("rejects discharge submissions with an empty transcript", async () => {
+  const { url } = await startServer({
+    tableName: "Discharges",
+    bucketName: "discharge-pdfs",
+    s3Client: { send: async () => assert.fail("Invalid submission must not upload.") },
+    dynamoClient: { send: async () => assert.fail("Invalid submission must not persist.") },
+  });
+  const form = new FormData();
+  form.append("transcript", " ");
+  form.append("pdfFile", new Blob(["%PDF"], { type: "application/pdf" }), "missing.pdf");
+
+  const response = await fetch(`${url}/api/discharge`, { method: "POST", body: form });
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "Provide a non-empty discharge transcript." });
+
+});
+
+test("reports missing DynamoDB configuration when creating or loading patient links", async () => {
+  const { url } = await startServer({ tableName: "" });
+  const form = new FormData();
+  form.append("transcript", "Take medication with food.");
+  const submitResponse = await fetch(`${url}/api/discharge`, { method: "POST", body: form });
+  assert.equal(submitResponse.status, 503);
+  assert.deepEqual(await submitResponse.json(), {
+    error: "Discharge storage is not configured: set DYNAMODB_TABLE_NAME on the server.",
+  });
+
+  const response = await fetch(`${url}/api/discharge/unknown`);
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: "Discharge storage is not configured: set DYNAMODB_TABLE_NAME on the server.",
+  });
+});
+
+test("reports missing S3 configuration only when a PDF is attached", async () => {
+  const { url } = await startServer({
+    tableName: "Discharges",
+    bucketName: "",
+  });
+  const form = new FormData();
+  form.append("transcript", "Take medication with food.");
+  form.append("pdfFile", new Blob(["%PDF"], { type: "application/pdf" }), "instructions.pdf");
+
+  const response = await fetch(`${url}/api/discharge`, { method: "POST", body: form });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: "PDF storage is not configured: set S3_BUCKET_NAME on the server.",
+  });
 });
 
 test("generates speech through ElevenLabs and returns audio", async () => {
