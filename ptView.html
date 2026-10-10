@@ -243,6 +243,352 @@
         word-spacing: 0.16em;
       }
 
+      .patient-header {
+        border-bottom: 1px solid var(--border);
+        background-color: var(--surface);
+      }
+
+      .patient-header-inner {
+        display: flex;
+        width: min(100% - 3rem, 76rem);
+        min-height: 4rem;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-inline: auto;
+      }
+
+      .patient-brand {
+        color: var(--link);
+        font-size: 1.25rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .patient-nav {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .patient-nav a {
+        display: inline-flex;
+        min-height: 44px;
+        align-items: center;
+        padding: 0.4rem 0.75rem;
+        border-radius: 3px;
+        font-size: 1rem;
+        text-decoration: none;
+      }
+
+      .patient-nav a[aria-current="page"] {
+        background-color: var(--link);
+        color: #ffffff;
+      }
+
+      .patient-label {
+        margin: 0;
+        color: var(--muted-text);
+        font-size: 1rem;
+      }
+
+      .patient-layout {
+        display: grid;
+        width: min(100% - 3rem, 76rem);
+        grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+        align-items: start;
+        gap: 1.5rem;
+        margin: 2rem auto;
+      }
+
+      .patient-primary,
+      .patient-sidebar {
+        display: grid;
+        min-width: 0;
+        gap: 1.25rem;
+      }
+
+      .patient-section,
+      .care-suggestions {
+        min-width: 0;
+        padding: 1.25rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background-color: var(--surface);
+      }
+
+      .patient-section h1,
+      .patient-section h2,
+      .care-suggestions h2 {
+        margin-block: 0 0.5rem;
+      }
+
+      .patient-section h1 {
+        font-size: 1.65rem;
+      }
+
+      .patient-section h2,
+      .care-suggestions h2 {
+        font-size: 1.3rem;
+      }
+
+      .section-description {
+        margin-block: 0 1rem;
+        color: var(--muted-text);
+      }
+
+      .checklist-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .checklist-tabs button {
+        min-height: 44px;
+        padding: 0.5rem 0.875rem;
+        border: 0;
+        border-bottom: 3px solid transparent;
+        border-radius: 0;
+        background: transparent;
+        color: var(--link);
+      }
+
+      .checklist-tabs button[aria-selected="true"] {
+        border-bottom-color: var(--link);
+        font-weight: 700;
+      }
+
+      .checklist-items {
+        display: grid;
+        max-height: 18rem;
+        overflow-y: scroll;
+        gap: 0.5rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .checklist-items label {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem;
+        border-radius: 3px;
+      }
+
+      .checklist-items input {
+        flex: 0 0 auto;
+      }
+
+      .follow-up textarea,
+      .care-suggestions textarea {
+        width: 100%;
+        min-height: 8rem;
+        resize: vertical;
+      }
+
+      .care-suggestions textarea {
+        height: 5rem;
+        min-height: 0;
+        overflow-y: scroll;
+      }
+
+      .care-suggestions {
+        padding: 1rem;
+      }
+
+      .care-suggestions .section-description {
+        margin-bottom: 0.5rem;
+      }
+
+      .follow-up {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border);
+      }
+
+      .follow-up h2 {
+        margin-block: 0 0.5rem;
+        font-size: 1.3rem;
+      }
+
+      .follow-up textarea {
+        min-height: 5rem;
+      }
+
+      .care-suggestions > label,
+      .care-suggestions .speech-controls label {
+        min-height: 0;
+        padding: 0.25rem 0;
+      }
+
+      .avs-transcript {
+        max-height: 18rem;
+        overflow-y: scroll;
+        padding: 0.875rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background-color: var(--surface);
+        user-select: text;
+      }
+
+      .avs-transcript p {
+        margin-block: 0 1em;
+      }
+
+      .avs-transcript p:last-child {
+        margin-bottom: 0;
+      }
+
+      .transcript-note {
+        margin-top: 0.75rem;
+        color: var(--muted-text);
+        font-size: 1rem;
+      }
+
+      .selection-tools {
+        position: fixed;
+        z-index: 5;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        max-width: min(24rem, calc(100vw - 1rem));
+        padding: 0.5rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background-color: var(--surface);
+        box-shadow: 0 2px 8px rgb(0 0 0 / 18%);
+      }
+
+      .selection-tools[hidden] {
+        display: none;
+      }
+
+      .selection-tools button {
+        min-height: 44px;
+        padding: 0.5rem 0.75rem;
+        font-size: 1rem;
+      }
+
+      .simplify-dialog {
+        width: min(34rem, calc(100% - 2rem));
+        max-height: min(80vh, 42rem);
+        overflow-y: auto;
+        padding: 1.5rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background-color: var(--surface);
+        color: var(--text);
+      }
+
+      .simplify-dialog::backdrop {
+        background-color: rgb(0 0 0 / 55%);
+      }
+
+      .simplify-dialog h2 {
+        margin-block: 0 0.75rem;
+        font-size: 1.3rem;
+      }
+
+      .simplify-dialog p {
+        max-width: none;
+        overflow-wrap: anywhere;
+      }
+
+      .simplify-dialog .dialog-selection {
+        padding: 0.75rem;
+        border-left: 4px solid var(--link);
+        background-color: var(--page-background);
+      }
+
+      .simplify-dialog .dialog-placeholder {
+        color: var(--muted-text);
+      }
+
+      .dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 1rem;
+      }
+
+      .speech-controls {
+        display: grid;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+      }
+
+      .speech-controls label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 1rem;
+      }
+
+      .speech-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .speech-buttons button {
+        min-height: 44px;
+        padding: 0.55rem 0.875rem;
+      }
+
+      .speech-note,
+      #speech-status {
+        margin: 0;
+        color: var(--muted-text);
+        font-size: 1rem;
+      }
+
+      @media (max-width: 52rem) {
+        .patient-header-inner,
+        .patient-layout {
+          width: min(100% - 2rem, 76rem);
+        }
+
+        .patient-layout {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 1rem;
+          margin-block: 1rem;
+        }
+
+        .patient-primary,
+        .patient-sidebar {
+          display: grid;
+          gap: 1rem;
+        }
+
+        .patient-primary > .patient-section:first-child,
+        .avs-section,
+        .care-suggestions,
+        .follow-up {
+          grid-column: auto;
+          grid-row: auto;
+        }
+      }
+
+      @media (max-width: 36rem) {
+        .patient-header-inner {
+          flex-wrap: wrap;
+          justify-content: flex-start;
+          padding-block: 0.5rem;
+        }
+
+        .patient-nav {
+          order: 3;
+          width: 100%;
+        }
+
+        .patient-label {
+          margin-left: auto;
+        }
+      }
+
       ::selection {
         background-color: var(--link);
         color: #ffffff;
@@ -261,40 +607,114 @@
     </style>
   </head>
   <body>
-    <main>
-      <section aria-labelledby="patient-information-heading">
-        <h1 id="patient-information-heading">Patient information</h1>
-        <p>Transferred patient information will appear below. Review it before listening.</p>
+    <header class="patient-header">
+      <div class="patient-header-inner">
+        <a class="patient-brand" href="#overview">Homeward</a>
+        <nav class="patient-nav" aria-label="Patient navigation">
+          <a href="#overview" aria-current="page">Home</a>
+          <a href="#medications-tab" data-category="medications">Medications</a>
+          <a href="#wounds-tab" data-category="wounds">Wounds</a>
+        </nav>
+        <p class="patient-label">Patient</p>
+      </div>
+    </header>
 
-        <label for="patient-data">Patient information</label>
-        <textarea
-          id="patient-data"
-          name="patient-data"
-          rows="12"
-          maxlength="5000"
-          aria-describedby="speech-privacy-note"
-          placeholder="Patient information will appear here"
-        ></textarea>
+    <main id="overview" class="patient-layout">
+      <div class="patient-primary">
+        <section class="patient-section" aria-labelledby="checklist-heading">
+          <h1 id="checklist-heading">Recovery checklist</h1>
+          <p class="section-description">From your after-visit summary (AVS)</p>
 
-        <p id="speech-privacy-note">
-          Read aloud sends this text to the configured ElevenLabs account to generate audio.
-          Use this only if your organization has approved sending this information to that service.
-        </p>
+          <div class="checklist-tabs" role="tablist" aria-label="Checklist category">
+            <button id="medications-tab" type="button" role="tab" aria-selected="true" aria-controls="checklist-items" data-category="medications">Medications</button>
+            <button id="wounds-tab" type="button" role="tab" aria-selected="false" aria-controls="checklist-items" data-category="wounds" tabindex="-1">Wounds</button>
+          </div>
 
-        <label for="speech-approval">
-          <input id="speech-approval" type="checkbox">
-          I confirm this text is approved for processing by ElevenLabs.
-        </label>
+          <ul id="checklist-items" class="checklist-items" aria-live="polite">
+            <li>
+              <label>
+                <input type="checkbox">
+                <span>Medication checklist item from your AVS</span>
+              </label>
+            </li>
+            <li>
+              <label>
+                <input type="checkbox">
+                <span>Medication checklist item from your AVS</span>
+              </label>
+            </li>
+          </ul>
+        </section>
 
-        <div>
-          <button id="read-aloud" type="button">Read aloud</button>
-          <button id="stop-reading" type="button" disabled>Stop reading</button>
-        </div>
+        <section class="patient-section avs-section" aria-labelledby="avs-heading">
+          <h2 id="avs-heading">After-visit summary (AVS)</h2>
+          <p class="section-description">Select a sentence to hear it read aloud or view a simpler explanation.</p>
+          <div id="avs-transcript" class="avs-transcript" tabindex="0" aria-describedby="transcript-note">
+            <p>Take your medication as directed by your care team.</p>
+            <p>Keep your follow-up appointment as scheduled.</p>
+            <p>Contact your care team if you have questions about your recovery.</p>
+          </div>
+          <p id="transcript-note" class="transcript-note">Example transcript preview. Your AVS transcript will be imported here when the data pipeline is connected.</p>
+        </section>
+      </div>
 
-        <p id="speech-status" role="status" aria-live="polite"></p>
-        <audio id="patient-audio" controls preload="none" hidden></audio>
-      </section>
+      <aside class="patient-sidebar">
+        <section class="care-suggestions" aria-labelledby="care-suggestions-heading">
+          <h2 id="care-suggestions-heading">Nurse: Care suggestions</h2>
+          <p class="section-description">Care suggestions shared by your nurse will appear here.</p>
+
+          <label for="patient-data">Care suggestions</label>
+          <textarea
+            id="patient-data"
+            name="patient-data"
+            rows="4"
+            maxlength="5000"
+            aria-describedby="speech-privacy-note"
+            placeholder="Care suggestions will appear here"
+          ></textarea>
+
+          <div class="speech-controls">
+            <p id="speech-privacy-note" class="speech-note">
+              Approved text is sent to ElevenLabs for speech.
+            </p>
+
+            <label for="speech-approval">
+              <input id="speech-approval" type="checkbox">
+              I confirm any text sent to ElevenLabs is approved by my organization.
+            </label>
+
+            <div class="speech-buttons">
+              <button id="read-aloud" type="button">Read aloud</button>
+              <button id="stop-reading" type="button" disabled>Stop reading</button>
+            </div>
+
+            <p id="speech-status" role="status" aria-live="polite"></p>
+            <audio id="patient-audio" controls preload="none" hidden></audio>
+          </div>
+
+          <section class="follow-up" aria-labelledby="follow-up-heading">
+            <h2 id="follow-up-heading">Follow-up questions</h2>
+            <p class="section-description">Write down questions to discuss with your care team.</p>
+            <label for="follow-up-questions">Your questions</label>
+            <textarea id="follow-up-questions" name="follow-up-questions" rows="4" placeholder="Type a question for your care team"></textarea>
+          </section>
+        </section>
+      </aside>
     </main>
+
+    <div id="selection-tools" class="selection-tools" role="group" aria-label="Selected transcript text actions" hidden>
+      <button id="read-selection" type="button">Read selected sentence aloud</button>
+      <button id="simplify-selection" type="button">Explain this sentence</button>
+    </div>
+
+    <dialog id="simplify-dialog" class="simplify-dialog" aria-labelledby="simplify-heading">
+      <h2 id="simplify-heading">Simplify this sentence</h2>
+      <p id="simplify-source" class="dialog-selection"></p>
+      <p id="simplify-placeholder" class="dialog-placeholder">A plain-language explanation will appear here when the AI simplification service is connected.</p>
+      <div class="dialog-actions">
+        <button id="close-simplify" type="button">Close</button>
+      </div>
+    </dialog>
 
     <script>
       (() => {
@@ -304,11 +724,74 @@
         const stopButton = document.querySelector("#stop-reading");
         const status = document.querySelector("#speech-status");
         const audioPlayer = document.querySelector("#patient-audio");
+        const checklistTabs = [...document.querySelectorAll(".checklist-tabs [role='tab']")];
+        const checklistItems = document.querySelector("#checklist-items");
+        const transcript = document.querySelector("#avs-transcript");
+        const selectionTools = document.querySelector("#selection-tools");
+        const readSelectionButton = document.querySelector("#read-selection");
+        const simplifySelectionButton = document.querySelector("#simplify-selection");
+        const simplifyDialog = document.querySelector("#simplify-dialog");
+        const simplifySource = document.querySelector("#simplify-source");
+        const closeSimplifyButton = document.querySelector("#close-simplify");
+        const checkedItems = {
+          medications: [false, false],
+          wounds: [false, false],
+        };
+        let activeCategory = "medications";
         let audioUrl = null;
+        let selectedTranscriptText = "";
 
         function setStatus(message) {
           status.textContent = message;
         }
+
+        function showChecklistCategory(category) {
+          checkedItems[activeCategory] = [...checklistItems.querySelectorAll("input[type='checkbox']")]
+            .map((checkbox) => checkbox.checked);
+          activeCategory = category;
+          const labels = category === "wounds"
+            ? ["Wound-care checklist item from your AVS", "Wound-care checklist item from your AVS"]
+            : ["Medication checklist item from your AVS", "Medication checklist item from your AVS"];
+
+          checklistItems.replaceChildren(...labels.map((text, index) => {
+            const item = document.createElement("li");
+            const label = document.createElement("label");
+            const checkbox = document.createElement("input");
+            const description = document.createElement("span");
+            checkbox.type = "checkbox";
+            checkbox.checked = checkedItems[category][index];
+            description.textContent = text;
+            label.append(checkbox, description);
+            item.append(label);
+            return item;
+          }));
+
+          checklistTabs.forEach((tab) => {
+            const selected = tab.dataset.category === category;
+            tab.setAttribute("aria-selected", String(selected));
+            tab.tabIndex = selected ? 0 : -1;
+          });
+        }
+
+        checklistTabs.forEach((tab, index) => {
+          tab.addEventListener("click", () => {
+            showChecklistCategory(tab.dataset.category);
+          });
+          tab.addEventListener("keydown", (event) => {
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+            event.preventDefault();
+            const offset = event.key === "ArrowRight" ? 1 : -1;
+            const nextTab = checklistTabs[(index + offset + checklistTabs.length) % checklistTabs.length];
+            nextTab.focus();
+            showChecklistCategory(nextTab.dataset.category);
+          });
+        });
+
+        document.querySelectorAll(".patient-nav a[data-category]").forEach((link) => {
+          link.addEventListener("click", () => {
+            showChecklistCategory(link.dataset.category);
+          });
+        });
 
         function getSpeechErrorMessage(result) {
           const providerMessages = {
@@ -328,6 +811,42 @@
           return result.error || "Speech generation failed. Please try again.";
         }
 
+        function updateSelectionTools() {
+          const selection = window.getSelection();
+          const selectedText = selection?.toString().trim() || "";
+          if (!selection || !selectedText || !transcript.contains(selection.anchorNode)) {
+            selectionTools.hidden = true;
+            selectedTranscriptText = "";
+            return;
+          }
+
+          const range = selection.getRangeAt(0);
+          if (!transcript.contains(range.endContainer)) {
+            selectionTools.hidden = true;
+            selectedTranscriptText = "";
+            return;
+          }
+
+          selectedTranscriptText = selectedText;
+          const rect = range.getBoundingClientRect();
+          selectionTools.hidden = false;
+          const toolsRect = selectionTools.getBoundingClientRect();
+          selectionTools.style.left = `${Math.max(
+            8,
+            Math.min(rect.left, window.innerWidth - toolsRect.width - 8),
+          )}px`;
+          selectionTools.style.top = `${Math.max(
+            8,
+            Math.min(rect.bottom + 8, window.innerHeight - toolsRect.height - 8),
+          )}px`;
+        }
+
+        function openSimplifyDialog() {
+          if (!selectedTranscriptText) return;
+          simplifySource.textContent = selectedTranscriptText;
+          if (!simplifyDialog.open) simplifyDialog.showModal();
+        }
+
         function clearAudioUrl() {
           if (audioUrl) {
             URL.revokeObjectURL(audioUrl);
@@ -345,11 +864,10 @@
           readButton.disabled = false;
         }
 
-        readButton.addEventListener("click", async () => {
-          const text = patientData.value.trim();
+        async function readTextAloud(text) {
+          text = text.trim();
           if (!text) {
-            setStatus("There is no patient information to read aloud.");
-            patientData.focus();
+            setStatus("There is no text to read aloud.");
             return;
           }
           if (!approval.checked) {
@@ -360,11 +878,16 @@
 
           clearAudioUrl();
           readButton.disabled = true;
+          readSelectionButton.disabled = true;
           stopButton.disabled = true;
           setStatus("Generating audio. Please wait.");
 
           try {
-            const response = await fetch("/api/speak", {
+            const speechEndpoint = new URL("/api/speak", window.location.origin);
+            if (window.location.port === "5500") {
+              speechEndpoint.port = "3000";
+            }
+            const response = await fetch(speechEndpoint, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ text }),
@@ -392,6 +915,7 @@
               setStatus("Playing generated audio.");
             } catch {
               readButton.disabled = false;
+              readSelectionButton.disabled = false;
               setStatus("Audio is ready. Press Play on the audio player to listen.");
             }
           } catch (error) {
@@ -401,8 +925,38 @@
                 : error.message,
             );
             readButton.disabled = false;
+            readSelectionButton.disabled = false;
           }
+        }
+
+        readButton.addEventListener("click", () => {
+          if (!patientData.value.trim()) {
+            setStatus("There is no care suggestion to read aloud.");
+            patientData.focus();
+            return;
+          }
+          void readTextAloud(patientData.value);
         });
+
+        readSelectionButton.addEventListener("click", () => {
+          if (selectedTranscriptText) void readTextAloud(selectedTranscriptText);
+        });
+
+        simplifySelectionButton.addEventListener("click", openSimplifyDialog);
+        closeSimplifyButton.addEventListener("click", () => simplifyDialog.close());
+        simplifyDialog.addEventListener("click", (event) => {
+          if (event.target === simplifyDialog) simplifyDialog.close();
+        });
+        selectionTools.addEventListener("mousedown", (event) => event.preventDefault());
+        document.addEventListener("selectionchange", updateSelectionTools);
+        transcript.addEventListener("pointerup", updateSelectionTools);
+        transcript.addEventListener("keyup", updateSelectionTools);
+        window.addEventListener("resize", () => {
+          if (!selectionTools.hidden) updateSelectionTools();
+        });
+        window.addEventListener("scroll", () => {
+          if (!selectionTools.hidden) updateSelectionTools();
+        }, true);
 
         stopButton.addEventListener("click", () => {
           stopReading();
@@ -411,6 +965,7 @@
 
         audioPlayer.addEventListener("play", () => {
           readButton.disabled = true;
+          readSelectionButton.disabled = true;
           stopButton.disabled = false;
           setStatus("Playing generated audio.");
         });
@@ -419,12 +974,14 @@
           if (!audioPlayer.ended) {
             stopButton.disabled = true;
             readButton.disabled = false;
+            readSelectionButton.disabled = false;
           }
         });
 
         audioPlayer.addEventListener("ended", () => {
           stopButton.disabled = true;
           readButton.disabled = false;
+          readSelectionButton.disabled = false;
           setStatus("Playback finished.");
         });
 

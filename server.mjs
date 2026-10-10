@@ -9,6 +9,10 @@ const defaultMaxAudioBytes = 25 * 1024 * 1024;
 const maxSpeechTextCharacters = 5000;
 const transcriptionUrl = "https://api.elevenlabs.io/v1/speech-to-text";
 const speechUrl = "https://api.elevenlabs.io/v1/text-to-speech";
+const patientPageOrigins = new Set([
+  "http://127.0.0.1:5500",
+  "http://localhost:5500",
+]);
 
 function sendJson(response, statusCode, body) {
   response.writeHead(statusCode, {
@@ -90,6 +94,28 @@ export function createAppServer({
 } = {}) {
   return createHttpServer(async (request, response) => {
     const url = new URL(request.url, "http://localhost");
+
+    if (url.pathname === "/api/speak") {
+      const origin = request.headers.origin;
+      if (patientPageOrigins.has(origin)) {
+        response.setHeader("Access-Control-Allow-Origin", origin);
+        response.setHeader("Vary", "Origin");
+      }
+
+      if (request.method === "OPTIONS") {
+        if (!patientPageOrigins.has(origin)) {
+          sendJson(response, 403, { error: "This origin is not allowed." });
+          return;
+        }
+        response.writeHead(204, {
+          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Max-Age": "600",
+        });
+        response.end();
+        return;
+      }
+    }
 
     const pageFiles = {
       "/": "nurseIntake.html",

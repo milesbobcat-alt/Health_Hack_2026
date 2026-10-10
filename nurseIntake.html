@@ -96,7 +96,7 @@
       button {
         min-width: 44px;
         min-height: 44px;
-        padding: 1rem 1.5rem;
+        padding: 0.65rem 1rem;
         border: 2px solid var(--link);
         border-radius: 3px;
         background-color: var(--link);
@@ -115,12 +115,17 @@
       .recording-actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.75rem;
-        justify-content: center;
+        gap: 0.5rem;
+        justify-content: flex-start;
+      }
+
+      .recording-actions button {
+        min-height: 44px;
+        padding: 0.5rem 0.875rem;
       }
 
       .recording-status {
-        min-height: 1.5em;
+        min-height: 1.25em;
         margin: 0;
         color: var(--muted-text);
       }
@@ -158,10 +163,6 @@
         cursor: pointer;
       }
 
-      .pdf-card {
-        grid-column: 1 / -1;
-      }
-
       .pdf-attachment {
         display: grid;
         gap: 0.75rem;
@@ -180,8 +181,8 @@
       textarea {
         box-sizing: border-box;
         width: 100%;
-        min-height: 14rem;
-        padding: 0.75rem;
+        min-height: 6.5rem;
+        padding: 0.65rem 0.75rem;
         border: 1px solid var(--border);
         border-radius: 3px;
         background-color: var(--surface);
@@ -221,7 +222,7 @@
 
       .header-content {
         display: flex;
-        min-height: 4.5rem;
+        min-height: 3.5rem;
         align-items: center;
         justify-content: space-between;
         gap: 1rem;
@@ -240,16 +241,16 @@
       }
 
       main {
-        padding-block: 3rem;
+        padding-block: 1rem;
       }
 
       .intro {
-        margin-bottom: 2rem;
+        margin-bottom: 1rem;
       }
 
       .intro h1 {
         margin-block: 0 0.5rem;
-        font-size: 2rem;
+        font-size: 1.75rem;
       }
 
       .intro p,
@@ -261,16 +262,16 @@
       .source-options {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 1.5rem;
+        gap: 1rem;
         align-items: stretch;
       }
 
       .source-card {
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 0.75rem;
         min-width: 0;
-        padding: 1.5rem;
+        padding: 1rem;
         border: 1px solid var(--border);
         border-radius: 3px;
         background-color: var(--surface);
@@ -287,15 +288,8 @@
 
       .recording-placeholder {
         display: grid;
-        flex: 1;
-        min-height: 14rem;
-        place-content: center;
-        justify-items: center;
-        gap: 1rem;
-        padding: 1.5rem;
-        border: 2px dashed var(--border);
-        border-radius: 3px;
-        text-align: center;
+        gap: 0.4rem;
+        text-align: left;
       }
 
       .recording-placeholder p {
@@ -325,12 +319,12 @@
       }
 
       .privacy-note {
-        margin-top: 1.5rem;
+        margin-top: 0.5rem;
         font-size: 1rem;
       }
 
       .privacy-note p {
-        margin-block: 0 0.5em;
+        margin-block: 0;
       }
 
       @media (max-width: 48rem) {
@@ -340,11 +334,15 @@
         }
 
         main {
-          padding-block: 2rem;
+          padding-block: 1.5rem;
         }
 
         .source-options {
           grid-template-columns: minmax(0, 1fr);
+        }
+
+        textarea {
+          min-height: 7rem;
         }
       }
 
@@ -375,29 +373,24 @@
       </section>
 
       <div class="source-options">
-        <section class="source-card" aria-labelledby="record-heading">
-          <h2 id="record-heading">Record audio</h2>
-          <p class="card-description">Speak the care instructions you want to add.</p>
+        <section id="care-instructions-card" class="source-card" aria-labelledby="care-heading">
+          <h2 id="care-heading">Care instructions</h2>
+          <p class="card-description">Type instructions from the EMR or record them using your microphone.</p>
           <div class="recording-placeholder">
-            <p id="recording-help">Allow microphone access, then record the care instructions.</p>
+            <p id="recording-help">Record care instructions and review the transcript below.</p>
             <div class="recording-actions">
               <button id="start-recording" type="button" aria-describedby="recording-help">Start recording</button>
               <button id="stop-recording" type="button" disabled>Stop and transcribe</button>
             </div>
             <p id="recording-status" class="recording-status" role="status" aria-live="polite" data-state="idle"></p>
           </div>
-        </section>
-
-        <section class="source-card" aria-labelledby="paste-heading">
-          <h2 id="paste-heading">Paste from the EMR</h2>
-          <p class="card-description">Copy/paste instructions into the text area.</p>
           <div class="text-entry">
-            <label for="emr-text">Care instructions</label>
-            <textarea id="emr-text" name="emr-text" rows="8" placeholder="Example discharge instruction text"></textarea>
+            <label for="emr-text">Additional care recommendations</label>
+            <textarea id="emr-text" name="emr-text" rows="4" placeholder="Enter or paste care instructions here"></textarea>
           </div>
         </section>
 
-        <section class="source-card pdf-card" aria-labelledby="pdf-heading">
+        <section class="source-card" aria-labelledby="pdf-heading">
           <h2 id="pdf-heading">Attach a PDF</h2>
           <p id="pdf-help" class="card-description">Choose one PDF file to attach to this page.</p>
           <div class="pdf-attachment">
@@ -416,10 +409,8 @@
       </div>
 
       <div class="privacy-note">
-        <p>Audio is sent to ElevenLabs for transcription. This app does not save recordings.</p>
-        <p>Only record information approved for your organization's privacy requirements, and review the transcript for accuracy.</p>
-        <p>Pasted text remains in this page and is not submitted.</p>
-        <p>A selected PDF remains in this page only; it is not uploaded or saved.</p>
+        <p>Audio is sent to ElevenLabs for transcription and is not saved here. Only record information approved by your organization, and review the transcript for accuracy.</p>
+        <p>Pasted instructions and selected PDFs stay on this page; they are not uploaded or saved.</p>
       </div>
     </main>
     <script>
@@ -484,7 +475,7 @@
         function resetControls() {
           startButton.disabled = false;
           stopButton.disabled = true;
-          document.querySelector(".source-card[aria-labelledby='record-heading']")
+          document.querySelector("#care-instructions-card")
             .removeAttribute("aria-busy");
         }
 
@@ -505,7 +496,7 @@
           setStatus("Uploading audio for transcription. Please wait.");
           startButton.disabled = true;
           stopButton.disabled = true;
-          document.querySelector(".source-card[aria-labelledby='record-heading']")
+          document.querySelector("#care-instructions-card")
             .setAttribute("aria-busy", "true");
 
           try {
