@@ -1,3 +1,21 @@
+# Local merge preview
+
+This local branch merges `origin/fhir-medication-viewer` and `origin/checklist`. No changes have been pushed to GitHub.
+
+Run with Node.js 22 and Python 3:
+
+```sh
+PORT=3120 node server.mjs
+```
+
+Open http://127.0.0.1:3120/. Search and select a synthetic patient, expand Medication statement, upload a text-based PDF or paste instructions, make a checklist draft, review it, and create a patient link using Copy link only. Changing patients requires clearing instructions, checklist drafts, and contact details. PDF extraction must finish before switching patients.
+
+The new patient checklist opens from its generated `/patient/<id>` link. The earlier read-aloud page remains at `/ptReadAloud.html` and still requires ElevenLabs configuration. FHIR records are displayed separately; they are not automatically inserted into the checklist medication comparison. The comparison uses uploaded/pasted instructions, as implemented on the checklist branch.
+
+Checklists are in memory and disappear on server restart. PDF extraction requires readable text, not scanned images. Run tests with `node --test server.test.mjs checklists.test.mjs`.
+
+## FHIR and audio branch documentation
+
 # Health Hack 2026
 
 A local nurse intake prototype with synthetic-patient search, care instructions, audio transcription, PDF selection, and a patient read-aloud page. Requires Node.js 22 or newer. No package installation is needed.
@@ -85,3 +103,26 @@ Live check on October 10, 2026: Andy Gusikowski has no MedicationStatement recor
 The expanded viewer now fetches MedicationStatements and MedicationRequests separately, labels each section, and preserves each record's source. Generic “Medication” statements are shown as unnamed records with their notes and recorded dates. They are not counted as identified drugs. No matching or merging of unnamed statements into prescription records is performed. Literal strength text from a coded product name is labeled “Strength in product name”; it is not used as the dose. Each record has one concise missing-information explanation instead of repeated empty fields. If one resource endpoint fails, the other can still be shown alongside a visible warning.
 
 Live check: Omar Abernathy (80a75b5a-fd30-4f38-895d-d8098fe7206e) has two unnamed statements and three named MedicationRequests. The prescription product names contain 25 MG, 325 MG, and 20 MG strengths, but no dosageInstruction is supplied for these orders. Dose and timing cannot be recovered from those records.
+
+
+## Checklist branch documentation
+
+# Care Checklist Demo
+
+## Run
+
+Use Node.js 20 or newer:
+
+```sh
+node server.mjs
+```
+
+Open http://127.0.0.1:3000. If port 3000 is busy, run `PORT=3001 node server.mjs` and open port 3001 instead. Run tests with `node --test *.test.mjs`.
+
+Upload a text-based PDF or paste discharge instructions. The app drafts smaller steps from the discharge section, groups them into medicines, daily care, appointments, tests, and other steps, and separates warning signs. Review each line and its source wording; adjust category and timing before sharing. If a PDF contains multiple patient examples, choose one first. Share by copying a link or select SMS/email; message delivery requires configured providers and patient consent. Messages contain only a generic link. Daily reminders are optional and stop after all items are checked.
+
+## Demo limits
+
+Without provider credentials, SMS and email have status `demo only` and no messages leave the computer. Scanned image PDFs require OCR and will not extract text here. Drafting is a conservative rules-based aid: it classifies source lines but does not infer doses, translate, or simplify clinical instructions. The clinician must review the wording and timing. Checklist data and contacts are kept in server memory for at most 30 days, and a restart clears them sooner. Localhost links can only be opened on the same computer. Use fictional patient information in this demo.
+
+For delivery after deployment, set `PUBLIC_BASE_URL` to the public HTTPS origin and configure `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `SENDGRID_API_KEY`, and `SENDGRID_FROM_EMAIL` in the server environment. The sending code uses [Twilio Messages](https://www.twilio.com/docs/messaging/api/message-resource) and [SendGrid Mail Send](https://www.twilio.com/docs/sendgrid/api-reference/mail-send/mail-send). A production service also needs durable storage and a persistent scheduler so reminders survive restarts.
