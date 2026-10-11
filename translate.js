@@ -95,8 +95,9 @@
       try {
         result = JSON.parse(body);
       } catch {
+        const responseDetail = body.trim().slice(0, 200);
         throw new Error(
-          `${endpoint} returned a non-JSON response (HTTP ${response.status}, ${contentType}). Check that the deployed server includes this translation API route.`,
+          `${endpoint} returned a non-JSON response (HTTP ${response.status}, ${contentType})${responseDetail ? `: ${responseDetail}` : ""}. Check the Lambda/API Gateway logs if this is a server error.`,
         );
       }
       if (!response.ok) {
@@ -105,20 +106,63 @@
       return result;
     }
 
-    const translatedAttributes = ["alt", "aria-description", "aria-label", "placeholder", "title", "value"];
-
     function createTranslationDocument() {
       const clone = document.documentElement.cloneNode(true);
       clone.querySelectorAll("script").forEach((script) => {
         script.textContent = "";
       });
-      if (translateValues) {
-        for (const field of document.querySelectorAll("textarea[data-translate-value]")) {
-          const translatedField = clone.querySelector(`#${CSS.escape(field.id)}`);
-          if (translatedField) translatedField.textContent = field.value;
-        }
+      clone.querySelectorAll("[data-translation-control]").forEach((control) => control.remove());
+
+      const translationNodes = [];
+      const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
+      const originalWalker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_TEXT);
+      const candidates = [];
+      const originalCandidates = [];
+      let node;
+      while ((node = walker.nextNode())) {
+        const parent = node.parentElement;
+        if (!parent || parent.closest(
+          "script, style, noscript, template, [hidden], [aria-hidden='true'], textarea, title",
+        ) || !node.nodeValue?.trim()) continue;
+        candidates.push(node);
       }
-      return `<!DOCTYPE html>\n${clone.outerHTML}`;
+      while ((node = originalWalker.nextNode())) {
+        const parent = node.parentElement;
+        if (!parent || parent.closest(
+          "script, style, noscript, template, [hidden], [aria-hidden='true'], textarea, title, [data-translation-control]",
+        ) || !node.nodeValue?.trim()) continue;
+        originalCandidates.push(node);
+      }
+      candidates.forEach((textNode, index) => {
+        const marker = clone.ownerDocument.createElement("span");
+        marker.id = `translation-text-${index}`;
+        marker.textContent = textNode.nodeValue;
+        textNode.replaceWith(marker);
+        translationNodes.push({
+          id: marker.id,
+          type: "text",
+          originalNode: originalCandidates[index],
+        });
+      });
+
+      if (translateValues) {
+        const valueContainer = clone.ownerDocument.createElement("div");
+        valueContainer.id = "translation-values";
+        valueContainer.style.cssText = "position:absolute;left:-10000px;top:0";
+        for (const field of document.querySelectorAll("textarea[data-translate-value]")) {
+          if (!field.value.trim()) continue;
+          const marker = clone.ownerDocument.createElement("span");
+          marker.id = `translation-value-${translationNodes.length}`;
+          marker.textContent = field.value;
+          valueContainer.append(marker);
+          translationNodes.push({ id: marker.id, type: "value", fieldId: field.id });
+        }
+        if (valueContainer.childElementCount) clone.body.append(valueContainer);
+      }
+      return {
+        html: `<!DOCTYPE html>\n${clone.outerHTML}`,
+        translationNodes,
+      };
     }
 
     function captureOriginalPage() {
@@ -127,7 +171,6 @@
         language: document.documentElement.lang,
         direction: document.documentElement.dir,
         textNodes: [],
-        attributes: [],
         values: [],
       };
       const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_TEXT);
@@ -135,14 +178,9 @@
       while ((node = walker.nextNode())) {
         state.textNodes.push({ node, value: node.nodeValue });
       }
-      for (const element of document.documentElement.querySelectorAll("*")) {
-        for (const name of translatedAttributes) {
-          if (element.hasAttribute(name)) {
-            state.attributes.push({ element, name, value: element.getAttribute(name) });
-          }
-        }
+      for (const element of document.documentElement.querySelectorAll("textarea[data-translate-value]")) {
         if (translateValues && element instanceof HTMLTextAreaElement
-          && element.hasAttribute("data-translate-value")) {
+          ) {
           state.values.push({ element, value: element.value });
         }
       }
@@ -151,44 +189,29 @@
 
     function restoreOriginalPage(state) {
       for (const item of state.textNodes) item.node.nodeValue = item.value;
-      for (const item of state.attributes) item.element.setAttribute(item.name, item.value);
       for (const item of state.values) item.element.value = item.value;
       document.title = state.title;
       document.documentElement.lang = state.language;
       document.documentElement.dir = state.direction;
     }
 
-    function applyTranslatedDocument(originalNode, translatedNode) {
-      if (!translatedNode || originalNode.nodeType !== translatedNode.nodeType) {
-        throw new Error("AWS Translate returned HTML with an unexpected structure.");
-      }
-      if (originalNode.nodeType === Node.TEXT_NODE) {
-        originalNode.nodeValue = translatedNode.nodeValue;
-        return;
-      }
-      if (originalNode.nodeType !== Node.ELEMENT_NODE) return;
-      if (originalNode.tagName !== translatedNode.tagName) {
-        throw new Error("AWS Translate returned HTML with an unexpected structure.");
-      }
-      if (originalNode.matches("script, style, [data-translation-control]")) return;
-
-      for (const name of translatedAttributes) {
-        if (originalNode.hasAttribute(name) && translatedNode.hasAttribute(name)) {
-          originalNode.setAttribute(name, translatedNode.getAttribute(name));
+    function applyTranslatedDocument(translatedDocument, translationNodes) {
+      for (const item of translationNodes) {
+        const translatedNode = translatedDocument.getElementById(item.id);
+        if (!translatedNode) {
+          throw new Error("AWS Translate returned HTML without all translated page text.");
+        }
+        if (item.type === "value") {
+          const field = document.getElementById(item.fieldId);
+          if (field instanceof HTMLTextAreaElement) field.value = translatedNode.textContent;
+        } else {
+          if (!item.originalNode) {
+            throw new Error("AWS Translate returned HTML with an unexpected text marker.");
+          }
+          item.originalNode.nodeValue = translatedNode.textContent;
         }
       }
-      if (translateValues && originalNode instanceof HTMLTextAreaElement
-        && originalNode.hasAttribute("data-translate-value")) {
-        originalNode.value = translatedNode.value;
-        return;
-      }
-
-      if (originalNode.childNodes.length !== translatedNode.childNodes.length) {
-        throw new Error("AWS Translate returned HTML with an unexpected structure.");
-      }
-      for (let index = 0; index < originalNode.childNodes.length; index += 1) {
-        applyTranslatedDocument(originalNode.childNodes[index], translatedNode.childNodes[index]);
-      }
+      document.title = translatedDocument.title;
     }
 
     function restorePage() {
@@ -239,11 +262,15 @@
       status.textContent = "Translating the full page with AWS Translate…";
       const originalState = captureOriginalPage();
       try {
-        const html = createTranslationDocument();
+        const translationDocument = createTranslationDocument();
         const response = await fetch("/api/translate", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ targetLanguage, html }),
+          cache: "no-store",
+          headers: {
+            "Content-Type": "text/html; charset=utf-8",
+            "X-Target-Language": targetLanguage,
+          },
+          body: translationDocument.html,
         });
         const result = await readApiJson(response, "The translation endpoint");
         if (typeof result.translatedHtml !== "string" || !result.translatedHtml.trim()) {
@@ -253,7 +280,7 @@
         if (!translatedDocument.documentElement || !translatedDocument.body) {
           throw new Error("AWS Translate returned an invalid HTML document.");
         }
-        applyTranslatedDocument(document.documentElement, translatedDocument.documentElement);
+        applyTranslatedDocument(translatedDocument, translationDocument.translationNodes);
         translatedItems = originalState;
         isTranslated = true;
         document.documentElement.lang = targetLanguage;

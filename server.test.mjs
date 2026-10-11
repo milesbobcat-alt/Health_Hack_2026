@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { ListLanguagesCommand, TranslateDocumentCommand } from "@aws-sdk/client-translate";
-import { createAppServer, handler } from "./index.mjs";
+import { createAppServer, createHandler, handler } from "./index.mjs";
 
 const runningServers = new Set();
 
@@ -140,7 +140,7 @@ test("serves the intake page from the root path", async () => {
   assert.match(page, /id="start-recording"/);
   assert.match(page, /\/api\/transcribe/);
   assert.match(page, /id="submit-discharge"/);
-  assert.match(page, /src="\/translate\.js"/);
+  assert.match(page, /src="\/translate\.js\?v=html-document-v3"/);
 });
 
 test("serves the patient view page with read-aloud controls", async () => {
@@ -165,7 +165,7 @@ test("serves the patient view page with read-aloud controls", async () => {
   assert.match(page, /class="button avs-document-link"/);
   assert.match(page, /\/api\/discharge\//);
   assert.match(page, /\/api\/speak/);
-  assert.match(page, /src="\/translate\.js"/);
+  assert.match(page, /src="\/translate\.js\?v=html-document-v3"/);
 });
 
 test("serves shared AWS Translate client-side controls", async () => {
@@ -173,8 +173,15 @@ test("serves shared AWS Translate client-side controls", async () => {
   const response = await fetch(`${url}/translate.js`);
 
   assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type"), /javascript/);
-  assert.match(await response.text(), /\/api\/translate\/languages/);
+  assert.match(response.headers.get("content-type"), /application\/javascript/);
+  assert.match(response.headers.get("cache-control"), /no-store/);
+  const script = await response.text();
+  assert.match(script, /\/api\/translate\/languages/);
+  assert.match(script, /"Content-Type": "text\/html; charset=utf-8"/);
+  assert.match(script, /"X-Target-Language": targetLanguage/);
+  assert.match(script, /translation-text-\$\{index\}/);
+  assert.match(script, /getElementById\(item\.id\)/);
+  assert.doesNotMatch(script, /AWS Translate returned HTML with an unexpected structure/);
 });
 
 test("returns JSON for unknown API routes", async () => {
@@ -268,6 +275,84 @@ test("translates full HTML documents through AWS Translate Document", async () =
   });
 });
 
+test("translates a raw HTML request body using its target-language header", async () => {
+  let translateCommand;
+  const { url } = await startServer({
+    translateClient: {
+      send: async (command) => {
+        if (command instanceof ListLanguagesCommand) {
+          return { Languages: [{ LanguageCode: "es", LanguageName: "Spanish" }] };
+        }
+        translateCommand = command;
+        return {
+          TranslatedDocument: { Content: Buffer.from("<html><body>Hola</body></html>") },
+        };
+      },
+    },
+  });
+  const response = await fetch(`${url}/api/translate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "X-Target-Language": "es",
+    },
+    body: "<html><body>Hello</body></html>",
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    translatedHtml: "<html><body>Hola</body></html>",
+  });
+  assert.equal(translateCommand.input.TargetLanguageCode, "es");
+  assert.equal(
+    Buffer.from(translateCommand.input.Document.Content).toString("utf8"),
+    "<html><body>Hello</body></html>",
+  );
+});
+
+test("translates a raw HTML API Gateway Lambda request body", async () => {
+  let translateCommand;
+  const lambdaHandler = createHandler({
+    translateClient: {
+      send: async (command) => {
+        if (command instanceof ListLanguagesCommand) {
+          return { Languages: [{ LanguageCode: "es", LanguageName: "Spanish" }] };
+        }
+        translateCommand = command;
+        return {
+          TranslatedDocument: { Content: Buffer.from("<html><body>Hola</body></html>") },
+        };
+      },
+    },
+  });
+
+  const response = await lambdaHandler({
+    httpMethod: "POST",
+    path: "/api/translate",
+    headers: {
+      host: "example.com",
+      "content-type": "text/html; charset=utf-8",
+      "x-target-language": "es",
+    },
+    body: "<html><body>Hello</body></html>",
+    isBase64Encoded: false,
+    requestContext: {
+      stage: "test",
+      identity: { sourceIp: "127.0.0.1" },
+    },
+  }, {});
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(JSON.parse(response.body), {
+    translatedHtml: "<html><body>Hola</body></html>",
+  });
+  assert.equal(translateCommand.input.TargetLanguageCode, "es");
+  assert.equal(
+    Buffer.from(translateCommand.input.Document.Content).toString("utf8"),
+    "<html><body>Hello</body></html>",
+  );
+});
+
 test("rejects invalid HTML documents and unsupported AWS Translate languages", async () => {
   const { url } = await startServer({
     translateClient: {
@@ -294,6 +379,9 @@ test("rejects invalid HTML documents and unsupported AWS Translate languages", a
     body: JSON.stringify({ targetLanguage: "es", html: "   " }),
   });
   assert.equal(emptyTextResponse.status, 400);
+  assert.deepEqual(await emptyTextResponse.json(), {
+    error: "The translation request did not include an HTML document. Refresh the page and try again.",
+  });
 });
 
 test("rejects HTML documents larger than AWS Translate's synchronous document limit", async () => {

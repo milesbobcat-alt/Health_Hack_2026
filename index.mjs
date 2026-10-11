@@ -95,7 +95,10 @@ function createApp({
     );
   });
   app.get("/translate.js", (request, response) => {
-    response.set("Cache-Control", "no-store").sendFile(
+    response.set({
+      "Cache-Control": "no-store, max-age=0",
+      "Content-Type": "application/javascript; charset=utf-8",
+    }).sendFile(
       resolve(projectDirectory, "translate.js"),
       (error) => {
         if (error && !response.headersSent) {
@@ -146,10 +149,42 @@ function createApp({
     }
   });
 
-  app.post("/api/translate", express.json({ limit: "700kb" }), async (request, response) => {
-    const { html, targetLanguage } = request.body || {};
+  app.post("/api/translate", express.raw({
+    type: () => true,
+    limit: "700kb",
+  }), async (request, response) => {
+    const contentType = request.get("content-type") || "";
+    let html;
+    let targetLanguage = request.get("x-target-language") || request.query.targetLanguage;
+    let requestBody;
+    if (Buffer.isBuffer(request.body)) {
+      requestBody = request.body.toString("utf8");
+    } else if (typeof request.body === "string") {
+      requestBody = request.body;
+    }
+    if (typeof requestBody !== "string") {
+      sendJson(response, 400, {
+        error: "The translation request body could not be read. Refresh the page and try again.",
+      });
+      return;
+    }
+    if (contentType.toLowerCase().includes("application/json")) {
+      let payload;
+      try {
+        payload = JSON.parse(requestBody);
+      } catch {
+        sendJson(response, 400, { error: "The translation request must contain valid JSON." });
+        return;
+      }
+      html = payload?.html;
+      targetLanguage = targetLanguage || payload?.targetLanguage;
+    } else {
+      html = requestBody;
+    }
     if (typeof html !== "string" || !html.trim()) {
-      sendJson(response, 400, { error: "Provide the HTML document to translate." });
+      sendJson(response, 400, {
+        error: "The translation request did not include an HTML document. Refresh the page and try again.",
+      });
       return;
     }
     if (Buffer.byteLength(html, "utf8") > maxTranslationDocumentBytes) {
@@ -485,7 +520,11 @@ export function createAppServer(options) {
   return createHttpServer(createApp(options));
 }
 
-export const handler = serverless(createApp());
+export function createHandler(options) {
+  return serverless(createApp(options));
+}
+
+export const handler = createHandler();
 
 const entryPoint = process.argv[1];
 if (entryPoint && pathToFileURL(resolve(entryPoint)).href === import.meta.url) {
