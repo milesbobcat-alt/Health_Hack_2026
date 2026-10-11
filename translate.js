@@ -82,112 +82,117 @@
     let translatedItems = [];
     let isTranslated = false;
     const translateValues = document.body.dataset.translateValues === "true";
-    const maxTranslationChunkBytes = 9_000;
-    const translationBatchSize = 8;
 
     function setBusy(busy) {
       languageSelect.disabled = busy;
       translateButton.disabled = busy || languageSelect.options.length < 2;
     }
 
-    function collectPageText() {
-      const items = [];
-      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-      let node;
-      while ((node = walker.nextNode())) {
-        const parent = node.parentElement;
-        if (!parent || parent.closest(
-          "script, style, noscript, template, [hidden], [aria-hidden='true'], [data-translation-control]",
-        )) continue;
-
-        const original = node.nodeValue || "";
-        const leadingWhitespace = original.match(/^\s*/u)?.[0] || "";
-        const trailingWhitespace = original.match(/\s*$/u)?.[0] || "";
-        const contentEnd = original.length - trailingWhitespace.length;
-        const text = original.slice(leadingWhitespace.length, contentEnd);
-        if (text) {
-          items.push({
-            node,
-            property: "nodeValue",
-            original,
-            text: text,
-            prefix: leadingWhitespace,
-            suffix: trailingWhitespace,
-          });
-        }
+    async function readApiJson(response, endpoint) {
+      const contentType = response.headers.get("content-type") || "unknown content type";
+      const body = await response.text();
+      let result;
+      try {
+        result = JSON.parse(body);
+      } catch {
+        throw new Error(
+          `${endpoint} returned a non-JSON response (HTTP ${response.status}, ${contentType}). Check that the deployed server includes this translation API route.`,
+        );
       }
-
-      const attributeNames = ["alt", "aria-description", "aria-label", "placeholder", "title"];
-      for (const element of document.body.querySelectorAll(
-        "input, textarea, button, a, img, iframe, [title], [aria-label], [aria-description]",
-      )) {
-        if (element.closest("[hidden], [aria-hidden='true'], [data-translation-control]")) continue;
-        for (const attribute of attributeNames) {
-          const value = element.getAttribute(attribute);
-          if (value?.trim()) {
-            items.push({ node: element, property: attribute, original: value, text: value });
-          }
-        }
-        if (translateValues && element.hasAttribute("data-translate-value")
-          && element instanceof HTMLTextAreaElement && element.value.trim()) {
-          items.push({ node: element, property: "value", original: element.value, text: element.value });
-        } else if (element instanceof HTMLInputElement
-          && ["button", "reset", "submit"].includes(element.type) && element.value.trim()) {
-          items.push({ node: element, property: "value", original: element.value, text: element.value });
-        }
+      if (!response.ok) {
+        throw new Error(result.error || `${endpoint} failed with HTTP ${response.status}.`);
       }
-
-      items.push({
-        node: document,
-        property: "title",
-        original: document.title,
-        text: document.title,
-      });
-      return items;
+      return result;
     }
 
-    function splitText(text) {
-      const chunks = [];
-      const encoder = new TextEncoder();
-      let characters = [];
-      let byteLength = 0;
-      let lastWhitespace = -1;
+    const translatedAttributes = ["alt", "aria-description", "aria-label", "placeholder", "title", "value"];
 
-      for (const character of text) {
-        const characterBytes = encoder.encode(character).length;
-        if (byteLength + characterBytes > maxTranslationChunkBytes) {
-          let splitAt = lastWhitespace + 1;
-          if (splitAt <= 0) splitAt = characters.length;
-          chunks.push(characters.slice(0, splitAt).join(""));
-          characters = characters.slice(splitAt);
-          byteLength = 0;
-          lastWhitespace = -1;
-          for (let index = 0; index < characters.length; index += 1) {
-            byteLength += encoder.encode(characters[index]).length;
-            if (/\s/u.test(characters[index])) lastWhitespace = index;
+    function createTranslationDocument() {
+      const clone = document.documentElement.cloneNode(true);
+      clone.querySelectorAll("script").forEach((script) => {
+        script.textContent = "";
+      });
+      if (translateValues) {
+        for (const field of document.querySelectorAll("textarea[data-translate-value]")) {
+          const translatedField = clone.querySelector(`#${CSS.escape(field.id)}`);
+          if (translatedField) translatedField.textContent = field.value;
+        }
+      }
+      return `<!DOCTYPE html>\n${clone.outerHTML}`;
+    }
+
+    function captureOriginalPage() {
+      const state = {
+        title: document.title,
+        language: document.documentElement.lang,
+        direction: document.documentElement.dir,
+        textNodes: [],
+        attributes: [],
+        values: [],
+      };
+      const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        state.textNodes.push({ node, value: node.nodeValue });
+      }
+      for (const element of document.documentElement.querySelectorAll("*")) {
+        for (const name of translatedAttributes) {
+          if (element.hasAttribute(name)) {
+            state.attributes.push({ element, name, value: element.getAttribute(name) });
           }
         }
-
-        characters.push(character);
-        byteLength += characterBytes;
-        if (/\s/u.test(character)) lastWhitespace = characters.length - 1;
+        if (translateValues && element instanceof HTMLTextAreaElement
+          && element.hasAttribute("data-translate-value")) {
+          state.values.push({ element, value: element.value });
+        }
       }
-      if (characters.length) chunks.push(characters.join(""));
-      return chunks;
+      return state;
+    }
+
+    function restoreOriginalPage(state) {
+      for (const item of state.textNodes) item.node.nodeValue = item.value;
+      for (const item of state.attributes) item.element.setAttribute(item.name, item.value);
+      for (const item of state.values) item.element.value = item.value;
+      document.title = state.title;
+      document.documentElement.lang = state.language;
+      document.documentElement.dir = state.direction;
+    }
+
+    function applyTranslatedDocument(originalNode, translatedNode) {
+      if (!translatedNode || originalNode.nodeType !== translatedNode.nodeType) {
+        throw new Error("AWS Translate returned HTML with an unexpected structure.");
+      }
+      if (originalNode.nodeType === Node.TEXT_NODE) {
+        originalNode.nodeValue = translatedNode.nodeValue;
+        return;
+      }
+      if (originalNode.nodeType !== Node.ELEMENT_NODE) return;
+      if (originalNode.tagName !== translatedNode.tagName) {
+        throw new Error("AWS Translate returned HTML with an unexpected structure.");
+      }
+      if (originalNode.matches("script, style, [data-translation-control]")) return;
+
+      for (const name of translatedAttributes) {
+        if (originalNode.hasAttribute(name) && translatedNode.hasAttribute(name)) {
+          originalNode.setAttribute(name, translatedNode.getAttribute(name));
+        }
+      }
+      if (translateValues && originalNode instanceof HTMLTextAreaElement
+        && originalNode.hasAttribute("data-translate-value")) {
+        originalNode.value = translatedNode.value;
+        return;
+      }
+
+      if (originalNode.childNodes.length !== translatedNode.childNodes.length) {
+        throw new Error("AWS Translate returned HTML with an unexpected structure.");
+      }
+      for (let index = 0; index < originalNode.childNodes.length; index += 1) {
+        applyTranslatedDocument(originalNode.childNodes[index], translatedNode.childNodes[index]);
+      }
     }
 
     function restorePage() {
-      for (const item of translatedItems) {
-        if (item.property === "nodeValue") {
-          item.node.nodeValue = item.original;
-        } else if (item.node === document) {
-          document.title = item.original;
-        } else if (item.property === "value") {
-          item.node.value = item.original;
-        } else {
-          item.node.setAttribute(item.property, item.original);
-        }
-      }
+      restoreOriginalPage(translatedItems);
       translatedItems = [];
       isTranslated = false;
       document.documentElement.lang = originalLanguage;
@@ -200,8 +205,7 @@
     async function loadLanguages() {
       try {
         const response = await fetch("/api/translate/languages");
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "Available languages could not be loaded.");
+        const result = await readApiJson(response, "The language-list endpoint");
         if (!Array.isArray(result.languages)) throw new Error("AWS Translate returned an invalid language list.");
 
         for (const language of result.languages) {
@@ -231,53 +235,26 @@
         return;
       }
 
-      const items = collectPageText();
-      if (!items.length) {
-        status.textContent = "There is no page text to translate.";
-        return;
-      }
       setBusy(true);
-      const translationChunks = items.map((item) => splitText(item.text));
-      const queuedChunks = translationChunks.flat();
-      const translatedChunks = [];
-      const totalBatches = Math.ceil(queuedChunks.length / translationBatchSize);
+      status.textContent = "Translating the full page with AWS Translate…";
+      const originalState = captureOriginalPage();
       try {
-        for (let offset = 0; offset < queuedChunks.length; offset += translationBatchSize) {
-          const batch = queuedChunks.slice(offset, offset + translationBatchSize);
-          status.textContent = `Translating page with AWS Translate (${Math.floor(offset / translationBatchSize) + 1}/${totalBatches})…`;
-          const response = await fetch("/api/translate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ targetLanguage, texts: batch }),
-          });
-          const result = await response.json();
-          if (!response.ok) throw new Error(result.error || "The page could not be translated.");
-          if (!Array.isArray(result.translatedTexts)
-            || result.translatedTexts.length !== batch.length
-            || result.translatedTexts.some((text) => typeof text !== "string")) {
-            throw new Error("AWS Translate returned an invalid translation.");
-          }
-          translatedChunks.push(...result.translatedTexts);
-        }
-
-        let chunkIndex = 0;
-        items.forEach((item, index) => {
-          const translatedText = translatedChunks
-            .slice(chunkIndex, chunkIndex + translationChunks[index].length)
-            .join("");
-          chunkIndex += translationChunks[index].length;
-          if (item.property === "nodeValue") {
-            item.node.nodeValue = `${item.prefix}${translatedText}${item.suffix}`;
-          } else if (item.node === document) {
-            document.title = translatedText;
-          } else if (item.property === "value") {
-            item.node.value = translatedText;
-          } else {
-            item.node.setAttribute(item.property, translatedText);
-          }
+        const html = createTranslationDocument();
+        const response = await fetch("/api/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ targetLanguage, html }),
         });
-
-        translatedItems = items;
+        const result = await readApiJson(response, "The translation endpoint");
+        if (typeof result.translatedHtml !== "string" || !result.translatedHtml.trim()) {
+          throw new Error("AWS Translate returned an invalid HTML document.");
+        }
+        const translatedDocument = new DOMParser().parseFromString(result.translatedHtml, "text/html");
+        if (!translatedDocument.documentElement || !translatedDocument.body) {
+          throw new Error("AWS Translate returned an invalid HTML document.");
+        }
+        applyTranslatedDocument(document.documentElement, translatedDocument.documentElement);
+        translatedItems = originalState;
         isTranslated = true;
         document.documentElement.lang = targetLanguage;
         document.documentElement.dir = ["ar", "he", "fa", "ur"].includes(targetLanguage.split("-")[0])
@@ -286,6 +263,7 @@
         translateButton.textContent = "Show original";
         status.textContent = "Page translated. Verify clinical instructions before relying on them.";
       } catch (error) {
+        restoreOriginalPage(originalState);
         status.textContent = error instanceof TypeError
           ? "Could not reach AWS Translate. Check your connection and try again."
           : error.message || "The page could not be translated.";

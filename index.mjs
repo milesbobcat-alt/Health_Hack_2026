@@ -22,7 +22,7 @@ import {
 import {
   ListLanguagesCommand,
   TranslateClient,
-  TranslateTextCommand,
+  TranslateDocumentCommand,
 } from "@aws-sdk/client-translate";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -31,8 +31,7 @@ const defaultMaxAudioBytes = 25 * 1024 * 1024;
 const maxPdfBytes = 20 * 1024 * 1024;
 const maxSpeechTextCharacters = 5000;
 const maxTranscriptBytes = 300 * 1024;
-const maxTranslationTextBytes = 10_000;
-const maxTranslationTexts = 250;
+const maxTranslationDocumentBytes = 100 * 1024;
 const transcriptionUrl = "https://api.elevenlabs.io/v1/speech-to-text";
 const speechUrl = "https://api.elevenlabs.io/v1/text-to-speech";
 const dischargeLifetimeSeconds = 30 * 24 * 60 * 60;
@@ -147,14 +146,14 @@ function createApp({
     }
   });
 
-  app.post("/api/translate", express.json({ limit: "100kb" }), async (request, response) => {
-    const { texts, targetLanguage } = request.body || {};
-    if (!Array.isArray(texts) || texts.length < 1 || texts.length > maxTranslationTexts
-      || texts.some((text) => typeof text !== "string" || !text.trim()
-        || Buffer.byteLength(text, "utf8") > maxTranslationTextBytes)) {
-      sendJson(response, 400, {
-        error: `Provide 1 to ${maxTranslationTexts} non-empty text values, each no larger than ${maxTranslationTextBytes} bytes.`,
-      });
+  app.post("/api/translate", express.json({ limit: "700kb" }), async (request, response) => {
+    const { html, targetLanguage } = request.body || {};
+    if (typeof html !== "string" || !html.trim()) {
+      sendJson(response, 400, { error: "Provide the HTML document to translate." });
+      return;
+    }
+    if (Buffer.byteLength(html, "utf8") > maxTranslationDocumentBytes) {
+      sendJson(response, 413, { error: "HTML documents must be 100 KB or smaller for AWS Translate." });
       return;
     }
     if (typeof targetLanguage !== "string" || !targetLanguage.trim()) {
@@ -169,32 +168,25 @@ function createApp({
         return;
       }
 
-      const uniqueTexts = [...new Set(texts)];
-      const translatedUniqueTexts = new Map();
-      let nextIndex = 0;
-      const workerCount = Math.min(5, uniqueTexts.length);
-      await Promise.all(Array.from({ length: workerCount }, async () => {
-        while (nextIndex < uniqueTexts.length) {
-          const index = nextIndex;
-          nextIndex += 1;
-          const result = await translationClient.send(new TranslateTextCommand({
-            Text: uniqueTexts[index],
-            SourceLanguageCode: "auto",
-            TargetLanguageCode: targetLanguage,
-          }));
-          if (typeof result.TranslatedText !== "string") {
-            throw new Error("AWS Translate returned no translated text.");
-          }
-          translatedUniqueTexts.set(uniqueTexts[index], result.TranslatedText);
-        }
+      const result = await translationClient.send(new TranslateDocumentCommand({
+        Document: {
+          Content: Buffer.from(html, "utf8"),
+          ContentType: "text/html",
+        },
+        SourceLanguageCode: "auto",
+        TargetLanguageCode: targetLanguage,
       }));
+      const translatedContent = result.TranslatedDocument?.Content;
+      if (!translatedContent?.length) {
+        throw new Error("AWS Translate returned no translated HTML document.");
+      }
 
       sendJson(response, 200, {
-        translatedTexts: texts.map((text) => translatedUniqueTexts.get(text)),
+        translatedHtml: Buffer.from(translatedContent).toString("utf8"),
       });
     } catch (error) {
-      console.error("Failed to translate page text with AWS Translate.", error);
-      sendJson(response, 502, { error: "AWS Translate could not translate the page. Please try again." });
+      console.error("Failed to translate HTML document with AWS Translate.", error);
+      sendJson(response, 502, { error: "AWS Translate could not translate the HTML document. Please try again." });
     }
   });
 
@@ -460,6 +452,10 @@ function createApp({
       sendJson(response, 200, { text: result.text });
     },
   );
+
+  app.use("/api", (request, response) => {
+    sendJson(response, 404, { error: "The requested API endpoint was not found." });
+  });
 
   app.use((error, request, response, next) => {
     if (response.headersSent) {
