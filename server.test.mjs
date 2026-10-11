@@ -3,9 +3,22 @@ import { afterEach, test } from "node:test";
 import { createAppServer, handler } from "./index.mjs";
 
 const runningServers = new Set();
+const sampleChecklist = {
+  medicine: ["Take medication with food."],
+  woundCare: [],
+  followUps: [],
+  additional: ["Drink plenty of fluids."],
+};
+
+function appendChecklist(form, checklist = sampleChecklist) {
+  form.append("checklist", JSON.stringify(checklist));
+}
 
 async function startServer(options) {
-  const server = createAppServer(options);
+  const server = createAppServer({
+    logger: { info() {}, error() {} },
+    ...options,
+  });
   runningServers.add(server);
   await new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -138,7 +151,9 @@ test("serves the intake page from the root path", async () => {
   assert.match(page, /Add care instructions/);
   assert.match(page, /id="start-recording"/);
   assert.match(page, /\/api\/transcribe/);
-  assert.match(page, /id="submit-discharge"/);
+  assert.match(page, /id="generate-checklist"/);
+  assert.match(page, /id="checklist-review"/);
+  assert.match(page, /Confirm &amp; Create Patient Link/);
 });
 
 test("serves the patient view page with read-aloud controls", async () => {
@@ -149,8 +164,10 @@ test("serves the patient view page with read-aloud controls", async () => {
   const page = await response.text();
   assert.match(page, /class="patient-layout"/);
   assert.match(page, /Recovery checklist/);
-  assert.match(page, /id="medications-tab"/);
-  assert.match(page, /id="wounds-tab"/);
+  assert.match(page, /id="medicine-tab"/);
+  assert.match(page, /id="woundCare-tab"/);
+  assert.match(page, /id="followUps-tab"/);
+  assert.match(page, /id="additional-tab"/);
   assert.doesNotMatch(page, /id="avs-transcript"/);
   assert.doesNotMatch(page, /Select a sentence to hear it read aloud or view a simpler explanation\./);
   assert.doesNotMatch(page, /Approved text is sent to ElevenLabs to generate audio\./);
@@ -162,6 +179,282 @@ test("serves the patient view page with read-aloud controls", async () => {
   assert.match(page, /class="button avs-document-link"/);
   assert.match(page, /\/api\/discharge\//);
   assert.match(page, /\/api\/speak/);
+});
+
+test("generates a flexible checklist from the transcript and extracted PDF text", async () => {
+  let invokeCommand;
+  const generatedChecklist = {
+    medicine: ["Take the pill each morning."],
+    woundCare: [],
+    followUps: ["Call the clinic next week."],
+    additional: [
+      "Drink water.",
+      "Walk each day.",
+      "Keep the paper.",
+      "Call if the clinic is closed.",
+      "Bring the list to your visit.",
+    ],
+  };
+  const { url } = await startServer({
+    bedrockModelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    pdfParser: async (buffer) => {
+      assert.equal(buffer.toString(), "%PDF test document");
+      return { text: "Call the clinic next week." };
+    },
+    bedrockClient: {
+      messages: {
+        create: async (params) => {
+          invokeCommand = params;
+          return {
+            content: [{
+              type: "tool_use",
+              name: "return_discharge_checklist",
+              input: generatedChecklist,
+            }],
+          };
+        },
+      },
+    },
+  });
+
+  const form = new FormData();
+  form.append("transcript", "Take the pill each morning.");
+  form.append("pdfFile", new Blob(["%PDF test document"], { type: "application/pdf" }), "aftercare.pdf");
+  const response = await fetch(`${url}/api/generate-checklist`, { method: "POST", body: form });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    checklist: generatedChecklist,
+    extractedDocText: "Call the clinic next week.",
+  });
+  assert.equal(invokeCommand.model, "anthropic.claude-3-5-sonnet-20241022-v2:0");
+  assert.equal(invokeCommand.max_tokens, 8192);
+  assert.deepEqual(invokeCommand.tool_choice, {
+    type: "tool",
+    name: "return_discharge_checklist",
+  });
+  assert.deepEqual(invokeCommand.tools[0].input_schema.required, [
+    "medicine",
+    "woundCare",
+    "followUps",
+    "additional",
+  ]);
+  assert.match(invokeCommand.system, /ONLY use facts and directives explicitly stated/);
+  assert.match(invokeCommand.messages[0].content, /Take the pill each morning/);
+  assert.match(invokeCommand.messages[0].content, /Call the clinic next week/);
+});
+
+test("accepts valid checklist JSON wrapped in Markdown and explanatory text", async () => {
+  const wrappedChecklist = `Here is the care plan:
+\`\`\`json
+{"medicine":[],"woundCare":["Keep the dressing clean."],"followUps":[],"additional":[]}
+\`\`\``;
+  const { url } = await startServer({
+    bedrockModelId: "anthropic.claude-haiku-4-5",
+    bedrockClient: {
+      messages: {
+        create: async () => ({
+          stop_reason: "end_turn",
+          content: [{ type: "text", text: wrappedChecklist }],
+        }),
+      },
+    },
+  });
+  const form = new FormData();
+  form.append("transcript", "Keep the dressing clean.");
+
+  const response = await fetch(`${url}/api/generate-checklist`, { method: "POST", body: form });
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).checklist, {
+    medicine: [],
+    woundCare: ["Keep the dressing clean."],
+    followUps: [],
+    additional: [],
+  });
+});
+
+test("rejects malformed Bedrock checklist output", async () => {
+  const { url } = await startServer({
+    awsRegion: "us-east-1",
+    bedrockModelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    bedrockClient: {
+      messages: {
+        create: async () => ({
+          stop_reason: "end_turn",
+          content: [{ type: "text", text: '{"medicine":[],"woundCare":[]}' }],
+        }),
+      },
+    },
+  });
+  const form = new FormData();
+  form.append("transcript", "Rest today.");
+
+  const response = await fetch(`${url}/api/generate-checklist`, { method: "POST", body: form });
+  assert.equal(response.status, 502);
+  const requestId = response.headers.get("x-request-id");
+  const result = await response.json();
+  assert.equal(result.error, "The care plan could not be generated. Please try again.");
+  assert.deepEqual(result.diagnostic, {
+    requestId,
+    stage: "checklist validation",
+    code: "InvalidChecklistResponse",
+    message: "Model response omitted checklist arrays: followUps, additional.",
+    contentBlockTypes: ["text"],
+    stopReason: "end_turn",
+    responseTextLength: '{"medicine":[],"woundCare":[]}'.length,
+    region: "us-east-1",
+    modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+  });
+});
+
+test("reports malformed checklist structure without exposing model output", async () => {
+  const privateOutput = "Patient-specific generated text must never be returned.";
+  const { url } = await startServer({
+    bedrockModelId: "anthropic.claude-haiku-4-5",
+    bedrockClient: {
+      messages: {
+        create: async () => ({
+          stop_reason: "max_tokens",
+          content: [{ type: "text", text: privateOutput }],
+        }),
+      },
+    },
+  });
+  const form = new FormData();
+  form.append("transcript", "Source instructions.");
+
+  const response = await fetch(`${url}/api/generate-checklist`, { method: "POST", body: form });
+  assert.equal(response.status, 502);
+  const result = await response.json();
+  assert.equal(result.diagnostic.code, "InvalidChecklistResponse");
+  assert.match(result.diagnostic.message, /did not contain a JSON object/);
+  assert.equal(result.diagnostic.stopReason, "max_tokens");
+  assert.equal(result.diagnostic.responseTextLength, privateOutput.length);
+  assert.doesNotMatch(JSON.stringify(result), /Patient-specific generated text/);
+});
+
+test("returns safe Bedrock error details and supports configuring an inference profile", async () => {
+  let requestedModelId;
+  const logEntries = [];
+  const { url } = await startServer({
+    awsRegion: "us-west-2",
+    bedrockModelId: "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+    logger: {
+      info: (message) => logEntries.push(JSON.parse(message)),
+      error: (...details) => logEntries.push({ event: "error", details }),
+    },
+    bedrockClient: {
+      messages: {
+        create: async (params) => {
+          requestedModelId = params.model;
+          const error = new Error("Model access is denied for this account.");
+          error.name = "AccessDeniedException";
+          error.requestID = "bedrock-request-123";
+          error.status = 403;
+          error.type = "permission_error";
+          throw error;
+        },
+      },
+    },
+  });
+  const form = new FormData();
+  form.append("transcript", "Private transcript must not be in diagnostics.");
+
+  const response = await fetch(`${url}/api/generate-checklist`, { method: "POST", body: form });
+  assert.equal(response.status, 502);
+  const requestId = response.headers.get("x-request-id");
+  const result = await response.json();
+  assert.deepEqual(result, {
+    error: "The care plan could not be generated. Please try again.",
+    diagnostic: {
+      requestId,
+      stage: "Bedrock invocation",
+      code: "AccessDeniedException",
+      message: "Model access is denied for this account.",
+      region: "us-west-2",
+      modelId: "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+      providerRequestId: "bedrock-request-123",
+      providerStatus: 403,
+      providerErrorType: "permission_error",
+    },
+  });
+  assert.equal(requestedModelId, "us.anthropic.claude-3-5-sonnet-20241022-v2:0");
+  assert.doesNotMatch(JSON.stringify(result), /Private transcript/);
+  assert.deepEqual(logEntries.map(({ event }) => event), [
+    "http_request_started",
+    "error",
+    "http_request_completed",
+  ]);
+  assert.ok(logEntries.every((entry) => !JSON.stringify(entry).includes("Private transcript")));
+});
+
+test("keeps the fixed-prompt Bedrock diagnostic disabled unless explicitly enabled", async () => {
+  const { url } = await startServer({
+    bedrockClient: {
+      messages: {
+        create: async () => assert.fail("Disabled diagnostic must not call Bedrock."),
+      },
+    },
+  });
+
+  const response = await fetch(`${url}/api/bedrock-diagnostic`, { method: "POST" });
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { error: "Not found." });
+});
+
+test("reports missing Mantle model configuration without calling the model", async () => {
+  const { url } = await startServer({
+    bedrockModelId: "",
+    bedrockDiagnosticsEnabled: true,
+    bedrockClient: {
+      messages: {
+        create: async () => assert.fail("Missing model ID must not call Bedrock Mantle."),
+      },
+    },
+  });
+
+  const response = await fetch(`${url}/api/bedrock-diagnostic`, { method: "POST" });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: "Bedrock is not configured: set BEDROCK_MODEL_ID on the server.",
+  });
+});
+
+test("smoke-tests the configured Bedrock model without patient data", async () => {
+  let commandInput;
+  const { url } = await startServer({
+    awsRegion: "us-west-2",
+    bedrockModelId: "us.anthropic.claude-sonnet-4-6",
+    bedrockDiagnosticsEnabled: true,
+    bedrockClient: {
+      messages: {
+        create: async (params) => {
+          commandInput = params;
+          return {
+            _request_id: "bedrock-smoke-test-id",
+            content: [{ type: "text", text: "OK" }],
+          };
+        },
+      },
+    },
+  });
+
+  const response = await fetch(`${url}/api/bedrock-diagnostic`, { method: "POST" });
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.deepEqual(result, {
+    ok: true,
+    requestId: response.headers.get("x-request-id"),
+    region: "us-west-2",
+    modelId: "us.anthropic.claude-sonnet-4-6",
+    providerRequestId: "bedrock-smoke-test-id",
+  });
+  assert.equal(commandInput.model, "us.anthropic.claude-sonnet-4-6");
+  assert.equal(commandInput.max_tokens, 16);
+  assert.deepEqual(commandInput.messages, [{
+    role: "user",
+    content: "Reply with exactly the word OK.",
+  }]);
 });
 
 test("uploads discharge PDF and persists the matching 30-day DynamoDB record", async () => {
@@ -182,6 +475,7 @@ test("uploads discharge PDF and persists the matching 30-day DynamoDB record", a
 
   const form = new FormData();
   form.append("transcript", "  Take medication with food.  ");
+  appendChecklist(form);
   form.append("pdfFile", new Blob(["%PDF test document"], { type: "application/pdf" }), "aftercare.pdf");
   const response = await fetch(`${url}/api/discharge`, { method: "POST", body: form });
 
@@ -204,6 +498,7 @@ test("uploads discharge PDF and persists the matching 30-day DynamoDB record", a
       createdAt: "2026-10-10T12:00:00.000Z",
       expiresAt: Math.floor(fixedNow / 1000) + 30 * 24 * 60 * 60,
       transcript: "Take medication with food.",
+      checklist: sampleChecklist,
       pdfKey: "discharges/test-discharge-id/aftercare.pdf",
       pdfOriginalName: "aftercare.pdf",
     },
@@ -224,6 +519,7 @@ test("saves a transcript and generates a patient link without requiring a PDF or
   });
   const form = new FormData();
   form.append("transcript", "Drink plenty of fluids.");
+  appendChecklist(form);
 
   const response = await fetch(`${url}/api/discharge`, { method: "POST", body: form });
   assert.equal(response.status, 201);
@@ -233,6 +529,7 @@ test("saves a transcript and generates a patient link without requiring a PDF or
   });
   assert.equal(saveCommand.input.TableName, "Discharges");
   assert.equal(saveCommand.input.Item.transcript, "Drink plenty of fluids.");
+  assert.deepEqual(saveCommand.input.Item.checklist, sampleChecklist);
   assert.equal("pdfKey" in saveCommand.input.Item, false);
 });
 
@@ -272,6 +569,7 @@ test("fetches a discharge record and signs its PDF download URL", async () => {
   assert.deepEqual(await response.json(), {
     dischargeId: "patient-123",
     transcript: "Rest and drink water.",
+    checklist: { medicine: [], woundCare: [], followUps: [], additional: [] },
     pdfUrl: "https://signed.example/download",
     pdfOriginalName: "aftercare.pdf",
   });
@@ -307,6 +605,7 @@ test("loads a transcript-only discharge without requiring S3", async () => {
   assert.deepEqual(await response.json(), {
     dischargeId: "transcript-only-id",
     transcript: "Drink plenty of fluids.",
+    checklist: { medicine: [], woundCare: [], followUps: [], additional: [] },
   });
 });
 
@@ -338,6 +637,7 @@ test("rejects discharge submissions with an empty transcript", async () => {
   });
   const form = new FormData();
   form.append("transcript", " ");
+  appendChecklist(form);
   form.append("pdfFile", new Blob(["%PDF"], { type: "application/pdf" }), "missing.pdf");
 
   const response = await fetch(`${url}/api/discharge`, { method: "POST", body: form });
@@ -350,6 +650,7 @@ test("reports missing DynamoDB configuration when creating or loading patient li
   const { url } = await startServer({ tableName: "" });
   const form = new FormData();
   form.append("transcript", "Take medication with food.");
+  appendChecklist(form);
   const submitResponse = await fetch(`${url}/api/discharge`, { method: "POST", body: form });
   assert.equal(submitResponse.status, 503);
   assert.deepEqual(await submitResponse.json(), {
@@ -371,6 +672,7 @@ test("reports missing S3 configuration only when a PDF is attached", async () =>
   });
   const form = new FormData();
   form.append("transcript", "Take medication with food.");
+  appendChecklist(form);
   form.append("pdfFile", new Blob(["%PDF"], { type: "application/pdf" }), "instructions.pdf");
 
   const response = await fetch(`${url}/api/discharge`, { method: "POST", body: form });
