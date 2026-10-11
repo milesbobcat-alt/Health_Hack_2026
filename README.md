@@ -1,22 +1,17 @@
 # Health_Hack_2026
 
-## Run locally
+## Patient discharge translation
 
-Install dependencies with `npm install`, copy `.env.example` to `.env`, and set the
-required ElevenLabs and AWS configuration values. A DynamoDB table is required to
-save transcripts and create patient links; set `DYNAMODB_TABLE_NAME` to a table
-whose partition key is the string `dischargeId`. Attaching a PDF is optional; to
-enable PDF uploads, also create an S3 bucket and set `S3_BUCKET_NAME`. Start the
-app with `npm start`.
-For local AWS access, use an AWS profile rather than placing access keys in `.env`.
+The patient page loads the supported target languages from Amazon Translate and translates the English discharge transcript with the synchronous `TranslateDocument` API. The translation is shown separately from the source text. Attached PDFs are not translated by this feature.
 
-## Deploy to AWS Lambda
+Run the app with Node.js 20 or newer:
 
-Deploy `index.mjs`, `nurseIntake.html`, `ptView.html`, and the production
-dependencies from `package.json`. Set the Lambda handler to `index.handler` and
-use a supported Node.js runtime. Configure
-`AWS_REGION`, `DYNAMODB_TABLE_NAME`, `S3_BUCKET_NAME`, `ELEVENLABS_API_KEY`, and
-`ELEVENLABS_VOICE_ID` as Lambda environment variables; provide S3 and DynamoDB
-access through the Lambda execution role. API Gateway must use a Lambda proxy
-integration so the handler receives the API Gateway event and can return its
-status, headers, and body.
+```powershell
+npm install
+$env:AWS_REGION = "us-east-1"
+npm start
+```
+
+The AWS SDK uses its standard credential provider chain. For local development, configure credentials with an AWS profile or AWS IAM Identity Center. In AWS, use an execution role rather than storing long-lived access keys in the application. The role needs `translate:ListLanguages` and `translate:TranslateDocument` permissions in the configured region.
+
+The translation controls require confirmation that the organization approves sending the patient text to AWS Translate. This implementation translates English source text only and enforces AWS TranslateDocument's 100,000-byte input limit. Review machine translations against the original clinical instructions; do not rely on a translation as the sole source for clinical decisions.

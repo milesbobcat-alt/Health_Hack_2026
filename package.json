@@ -1,21 +1,13 @@
 {
-  "name": "discharge-ai",
+  "name": "healthhack2026",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node index.mjs",
-    "test": "node --test"
+    "start": "node server.mjs",
+    "test:translate": "node --test server.translate.test.mjs"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.850.0",
-    "@aws-sdk/client-s3": "^3.850.0",
-    "@aws-sdk/lib-dynamodb": "^3.850.0",
-    "@aws-sdk/s3-request-presigner": "^3.850.0",
-    "dotenv": "^16.6.1",
-    "express": "^5.1.0",
-    "multer": "^2.0.2",
-    "serverless-http": "^3.2.0",
-    "uuid": "^11.1.0"
+    "@aws-sdk/client-translate": "^3.1149.0"
   }
 }
