@@ -1,6 +1,7 @@
+import {ListLanguagesCommand, TranslateDocumentCommand} from "@aws-sdk/client-translate";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { createAppServer, handler } from "./index.mjs";
+import { createAppServer, createHandler, handler } from "./index.mjs";
 
 const runningServers = new Set();
 const sampleChecklist = {
@@ -871,7 +872,7 @@ test("combined transcript/PDF instructions reach Bedrock and survive response va
  const form=new FormData();form.append("transcript","Call the clinic Monday");form.append("pdfFile",new Blob(["synthetic PDF"],{type:"application/pdf"}),"instructions.pdf");
  const response=await fetch(`${url}/api/generate-checklist`,{method:"POST",body:form});assert.equal(response.status,200);
  const result=await response.json();assert.deepEqual(result.checklist,plan);assert.equal(calls,2);
- assert.match(renderPatientCategory(result.checklist,"woundCare"),/Clean the incision.*Frequency: daily/);
+ assert.match(renderPatientCategory(result.checklist,"woundCare"),/Clean the incision.*daily/);
  assert.match(renderPatientCategory(result.checklist,"followUps"),/Call the clinic Monday/);
 });
 test("source parser exceptions are logged without source content", async () => {
@@ -923,4 +924,292 @@ test("FHIR failure remains visible as incomplete history, without inventing befo
  const {url}=await startServer({fhirBaseUrl:"https://fhir.example/r4",bedrockModelId:"mock",fhirFetchImpl:async()=>{throw new Error("unavailable");},bedrockClient:{messages:{create:async()=>({content:[{type:"tool_use",name:"return_discharge_checklist",input:{...structuredPlan,medicationTransitions:transitions}}]})}}});
  const form=new FormData();form.append("transcript","Begin aspirin as needed");form.append("patientContext",JSON.stringify({id:"omar",server:"https://fhir.example/r4"}));const response=await fetch(`${url}/api/generate-checklist`,{method:"POST",body:form});assert.equal(response.status,200);
  const result=await response.json();assert.deepEqual(result.medicationComparison.baseline,[]);assert.equal(result.medicationComparison.warnings.length,2);
+});
+
+test("lists all AWS Translate languages, follows pagination, and caches the result", async () => {
+  const commands = [];
+  const { url } = await startServer({
+    translateClient: {
+      send: async (command) => {
+        commands.push(command);
+        assert.ok(command instanceof ListLanguagesCommand);
+        if (command.input.NextToken) {
+          return {
+            Languages: [{ LanguageCode: "es", LanguageName: "Spanish" }],
+          };
+        }
+        return {
+          Languages: [{ LanguageCode: "en", LanguageName: "English" }],
+          NextToken: "next-page",
+        };
+      },
+    },
+  });
+
+  const firstResponse = await fetch(`${url}/api/translate/languages`);
+  const secondResponse = await fetch(`${url}/api/translate/languages`);
+
+  assert.equal(firstResponse.status, 200);
+  assert.deepEqual(await firstResponse.json(), {
+    languages: [
+      { code: "en", name: "English" },
+      { code: "es", name: "Spanish" },
+    ],
+  });
+  assert.equal(secondResponse.status, 200);
+  assert.equal(commands.length, 2);
+  assert.equal(commands[0].input.DisplayLanguageCode, "en");
+  assert.equal(commands[1].input.NextToken, "next-page");
+});
+
+test("translates full HTML documents through AWS Translate Document", async () => {
+  const commands = [];
+  const { url } = await startServer({
+    translateClient: {
+      send: async (command) => {
+        commands.push(command);
+        if (command instanceof ListLanguagesCommand) {
+          return { Languages: [{ LanguageCode: "es", LanguageName: "Spanish" }] };
+        }
+        assert.ok(command instanceof TranslateDocumentCommand);
+        return {
+          TranslatedDocument: {
+            Content: Buffer.from("<html><body><h1>Instrucciones de cuidado</h1></body></html>"),
+          },
+        };
+      },
+    },
+  });
+
+  const response = await fetch(`${url}/api/translate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      targetLanguage: "es",
+      html: "<!DOCTYPE html><html><body><h1>Care instructions</h1></body></html>",
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    translatedHtml: "<html><body><h1>Instrucciones de cuidado</h1></body></html>",
+  });
+  const translationCommand = commands.find((command) => command instanceof TranslateDocumentCommand);
+  assert.ok(translationCommand);
+  assert.deepEqual(translationCommand.input, {
+    Document: {
+      Content: Buffer.from("<!DOCTYPE html><html><body><h1>Care instructions</h1></body></html>"),
+      ContentType: "text/html",
+    },
+    SourceLanguageCode: "en",
+    TargetLanguageCode: "es",
+  });
+});
+
+test("translates a raw HTML request body using its target-language header", async () => {
+  let translateCommand;
+  const { url } = await startServer({
+    translateClient: {
+      send: async (command) => {
+        if (command instanceof ListLanguagesCommand) {
+          return { Languages: [{ LanguageCode: "es", LanguageName: "Spanish" }] };
+        }
+        translateCommand = command;
+        return {
+          TranslatedDocument: { Content: Buffer.from("<html><body>Hola</body></html>") },
+        };
+      },
+    },
+  });
+  const response = await fetch(`${url}/api/translate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "X-Target-Language": "es",
+    },
+    body: "<html><body>Hello</body></html>",
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    translatedHtml: "<html><body>Hola</body></html>",
+  });
+  assert.equal(translateCommand.input.TargetLanguageCode, "es");
+  assert.equal(
+    Buffer.from(translateCommand.input.Document.Content).toString("utf8"),
+    "<html><body>Hello</body></html>",
+  );
+});
+
+test("translates a raw HTML API Gateway Lambda request body", async () => {
+  let translateCommand;
+  const lambdaHandler = createHandler({
+    translateClient: {
+      send: async (command) => {
+        if (command instanceof ListLanguagesCommand) {
+          return { Languages: [{ LanguageCode: "es", LanguageName: "Spanish" }] };
+        }
+        translateCommand = command;
+        return {
+          TranslatedDocument: { Content: Buffer.from("<html><body>Hola</body></html>") },
+        };
+      },
+    },
+  });
+
+  const response = await lambdaHandler({
+    httpMethod: "POST",
+    path: "/api/translate",
+    headers: {
+      host: "example.com",
+      "content-type": "text/html; charset=utf-8",
+      "x-target-language": "es",
+    },
+    body: "<html><body>Hello</body></html>",
+    isBase64Encoded: false,
+    requestContext: {
+      stage: "test",
+      identity: { sourceIp: "127.0.0.1" },
+    },
+  }, {});
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(JSON.parse(response.body), {
+    translatedHtml: "<html><body>Hola</body></html>",
+  });
+  assert.equal(translateCommand.input.TargetLanguageCode, "es");
+  assert.equal(
+    Buffer.from(translateCommand.input.Document.Content).toString("utf8"),
+    "<html><body>Hello</body></html>",
+  );
+});
+
+test("returns a safe AWS Translate diagnostic and logs no document content on failure", async () => {
+  const errors = [];
+  const { url } = await startServer({
+    awsRegion: "us-west-2",
+    logger: { info() {}, error: (entry) => errors.push(entry) },
+    translateClient: {
+      send: async (command) => {
+        if (command instanceof ListLanguagesCommand) {
+          return { Languages: [{ LanguageCode: "es", LanguageName: "Spanish" }] };
+        }
+        const error = new Error("Source document text must not be logged.");
+        error.name = "AccessDeniedException";
+        error.$metadata = { requestId: "aws-request-123", httpStatusCode: 403 };
+        throw error;
+      },
+    },
+  });
+  const privateDocumentText = "Private patient discharge instruction";
+  const response = await fetch(`${url}/api/translate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "X-Target-Language": "es",
+    },
+    body: `<html><body>${privateDocumentText}</body></html>`,
+  });
+
+  assert.equal(response.status, 502);
+  const result = await response.json();
+  assert.deepEqual(result.diagnostic, {
+    requestId: response.headers.get("x-request-id"),
+    code: "AccessDeniedException",
+    region: "us-west-2",
+  });
+  assert.match(result.error, /AWS Translate could not translate/);
+  assert.doesNotMatch(JSON.stringify(result), /Private patient discharge instruction/);
+  assert.doesNotMatch(errors.join("\n"), /Private patient discharge instruction|Source document text/);
+  assert.match(errors.join("\n"), /aws_translate_document_failed/);
+  assert.match(errors.join("\n"), /AccessDeniedException/);
+});
+
+test("rejects invalid HTML documents and unsupported AWS Translate languages", async () => {
+  const { url } = await startServer({
+    translateClient: {
+      send: async (command) => {
+        assert.ok(command instanceof ListLanguagesCommand);
+        return { Languages: [{ LanguageCode: "es", LanguageName: "Spanish" }] };
+      },
+    },
+  });
+
+  const unsupportedLanguageResponse = await fetch(`${url}/api/translate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ targetLanguage: "xx", html: "<p>Hello</p>" }),
+  });
+  assert.equal(unsupportedLanguageResponse.status, 400);
+  assert.deepEqual(await unsupportedLanguageResponse.json(), {
+    error: "Choose a supported target language.",
+  });
+
+  const emptyTextResponse = await fetch(`${url}/api/translate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ targetLanguage: "es", html: "   " }),
+  });
+  assert.equal(emptyTextResponse.status, 400);
+  assert.deepEqual(await emptyTextResponse.json(), {
+    error: "The translation request did not include an HTML document. Refresh the page and try again.",
+  });
+});
+
+test("rejects HTML documents larger than AWS Translate's synchronous document limit", async () => {
+  const { url } = await startServer({
+    translateClient: {
+      send: async (command) => {
+        assert.ok(command instanceof ListLanguagesCommand);
+        return { Languages: [{ LanguageCode: "es", LanguageName: "Spanish" }] };
+      },
+    },
+  });
+  const response = await fetch(`${url}/api/translate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ targetLanguage: "es", html: `<p>${"a".repeat(100 * 1024)}</p>` }),
+  });
+
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), {
+    error: "HTML documents must be 100 KB or smaller for AWS Translate.",
+  });
+});
+
+
+test("translation is patient-only and preserves structured patient modules", async () => {
+  const {url} = await startServer();
+  const nurse = await (await fetch(url)).text();
+  const patient = await (await fetch(`${url}/ptView.html`)).text();
+  const script = await (await fetch(`${url}/translate.js`)).text();
+  assert.doesNotMatch(nurse, /src="\/translate.js/);
+  assert.match(patient, /src="\/translate.js/);
+  assert.match(patient, /data-translate-value/);
+  assert.match(patient, /patient-content-updated/);
+  assert.match(patient, />CarePack<\/a>/);
+  assert.doesNotMatch(patient, /<nav class="patient-nav"|renderComparison|comparisonReadAloud|id="medication-comparison"/);
+  assert.match(script, /createHTMLDocument/);
+  assert.doesNotMatch(script, /innerHTML\s*=/);
+});
+
+test("translation language-list failures retry without retaining failed cache", async () => {
+  let calls=0;
+  const {url} = await startServer({logger:{info(){},error(){}},translateClient:{send:async()=>{
+    if (++calls===1) throw Object.assign(new Error('private'),{name:'AccessDeniedException'});
+    return {Languages:[{LanguageCode:'es',LanguageName:'Spanish'}]};
+  }}});
+  assert.equal((await fetch(`${url}/api/translate/languages`)).status,502);
+  assert.equal((await fetch(`${url}/api/translate/languages`)).status,200);
+  assert.equal(calls,2);
+});
+
+test("translation timeout aborts upstream and returns an understandable error", async () => {
+  const {url} = await startServer({translationTimeoutMs:10,logger:{info(){},error(){}},translateClient:{send:async(command,{abortSignal})=>{
+    if(command instanceof ListLanguagesCommand)return {Languages:[{LanguageCode:'es',LanguageName:'Spanish'}]};
+    return new Promise((resolve,reject)=>abortSignal.addEventListener('abort',()=>reject(abortSignal.reason),{once:true}));
+  }}});
+  const response=await fetch(`${url}/api/translate`,{method:'POST',headers:{'Content-Type':'text/html','X-Target-Language':'es'},body:'<p>Hello</p>'});
+  assert.equal(response.status,502);
+  assert.match((await response.json()).error,/AWS Translate could not translate/);
 });

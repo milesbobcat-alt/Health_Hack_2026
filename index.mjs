@@ -1,3 +1,4 @@
+import {ListLanguagesCommand, TranslateClient, TranslateDocumentCommand} from "@aws-sdk/client-translate";
 import { separateDose, validateTransitions, mergeTransitionSources, fhirBaseline, validateComparison, reclassifyChangedRegimens } from "./medication-comparison.mjs";
 import { mergeSourceChecklists } from "./source-checklists.mjs";
 import { isMedication, editMedication, isWoundCare, editWoundCare } from "./medication-plan.mjs";
@@ -41,7 +42,7 @@ const checklistSystemPrompt = `You are a clinical discharge assistant. Your task
 
 STRICT RULES:
 1. ONLY use facts and directives explicitly stated in the sources below. Do not invent outside medical advice or add common knowledge not mentioned.
-2. Write all action items at a simple 5th-grade reading level.
+2. Write patient action items as coherent, very short sentences at a simple 5th-grade reading level. Start with the action; remove filler and repeated background explanations. Aim for one short sentence per item, usually under 20 words, but retain every documented amount, timing, duration, condition, and warning. Keep separate actions as separate items. Capitalize the first word of every sentence. Medication instructions should be patient actions and essential conditions or limits, without clinician-only rationale or repeated medication history; retain original source detail for any conflict, as required below. Warning items must state the exact action and triggering symptom succinctly; preserve Call 911 and other emergency urgency. Do not impose a word limit that drops clinical details. Structured medication fields remain separate, and source wording and conflict flags remain intact.
 3. Organize items into 5 categories:
    - "medicine": Prescriptions, dosage changes, times to take meds.
    - "woundCare": Dressings, cleaning, icing, stitches, incision care.
@@ -171,6 +172,8 @@ function createApp({
   bucketName = process.env.S3_BUCKET_NAME,
   dynamoClient,
   bedrockClient,
+  translateClient,
+  translationTimeoutMs = 15000,
   bedrockModelId = process.env.BEDROCK_MODEL_ID,
   bedrockDiagnosticsEnabled = process.env.BEDROCK_DIAGNOSTICS_ENABLED === "true",
   pdfParser = pdfParse,
@@ -182,6 +185,9 @@ function createApp({
   logger = console,
 } = {}) {
   const app = express();
+  const translationClient = translateClient || new TranslateClient({region: awsRegion});
+  const maxTranslationDocumentBytes = 100 * 1024;
+  const sendTranslation = command => translationClient.send(command, {abortSignal: AbortSignal.timeout(translationTimeoutMs)});
   const fhir = createFhirClient({ baseUrl: fhirBaseUrl, fetchImpl: fhirFetchImpl, timeoutMs: fhirTimeoutMs });
   const documentClient = dynamoClient
     || DynamoDBDocumentClient.from(new DynamoDBClient({ region: awsRegion }));
@@ -254,7 +260,7 @@ function createApp({
     );
   });
 
-  for (const file of ['patient-state.mjs', 'patient-viewer.mjs', 'medication-plan.mjs', 'medication-comparison.mjs', 'comparison-ui.mjs']) {
+  for (const file of ['patient-questions.mjs', 'patient-state.mjs', 'patient-viewer.mjs', 'medication-plan.mjs', 'medication-comparison.mjs', 'comparison-ui.mjs']) {
     app.get(`/${file}`, (request, response) => {
       response.set('Cache-Control', 'no-store').type('text/javascript').sendFile(resolve(projectDirectory, file));
     });
@@ -298,6 +304,170 @@ function createApp({
       if (!response.headersSent) sendJson(response, 502, { error: 'The FHIR sandbox request failed. Please try again.' });
     });
   });
+
+  app.get("/translate.js", (request, response) => {
+    response.set({
+      "Cache-Control": "no-store, max-age=0",
+      "Content-Type": "application/javascript; charset=utf-8",
+    }).sendFile(
+      resolve(projectDirectory, "translate.js"),
+      (error) => {
+        if (error && !response.headersSent) {
+          sendJson(response, 500, { error: "The translation controls could not be loaded." });
+        }
+      },
+    );
+  });
+
+  let supportedLanguagesPromise;
+  async function getSupportedLanguages() {
+    if (!supportedLanguagesPromise) {
+      supportedLanguagesPromise = (async () => {
+        const languages = [];
+        let nextToken;
+        do {
+          const result = await sendTranslation(new ListLanguagesCommand({
+            DisplayLanguageCode: "en",
+            ...(nextToken && { NextToken: nextToken }),
+          }));
+          languages.push(...(result.Languages || []));
+          nextToken = result.NextToken;
+        } while (nextToken);
+        return languages;
+      })().catch((error) => {
+        supportedLanguagesPromise = undefined;
+        throw error;
+      });
+    }
+    return supportedLanguagesPromise;
+  }
+
+  app.get("/api/translate/languages", async (request, response) => {
+    try {
+      const languages = await getSupportedLanguages();
+      sendJson(response, 200, {
+        languages: languages
+          .filter((language) => language.LanguageCode && language.LanguageName)
+          .sort((left, right) => left.LanguageName.localeCompare(right.LanguageName))
+          .map(({ LanguageCode, LanguageName }) => ({
+            code: LanguageCode,
+            name: LanguageName,
+          })),
+      });
+    } catch (error) {
+      const code = typeof error?.name === "string" ? error.name.slice(0, 80) : "TranslateError";
+      logger.error(JSON.stringify({
+        event: "aws_translate_languages_failed",
+        requestId: request.requestId,
+        region: awsRegion || "SDK default",
+        code,
+        awsRequestId: error?.$metadata?.requestId,
+        httpStatusCode: error?.$metadata?.httpStatusCode,
+      }));
+      sendJson(response, 502, {
+        error: "Available languages could not be loaded from AWS Translate.",
+        diagnostic: {
+          requestId: request.requestId,
+          code,
+          region: awsRegion || "SDK default",
+        },
+      });
+    }
+  });
+
+  app.post("/api/translate", express.raw({
+    type: () => true,
+    limit: "700kb",
+  }), async (request, response) => {
+    const contentType = request.get("content-type") || "";
+    let html;
+    let targetLanguage = request.get("x-target-language") || request.query.targetLanguage;
+    let requestBody;
+    if (Buffer.isBuffer(request.body)) {
+      requestBody = request.body.toString("utf8");
+    } else if (typeof request.body === "string") {
+      requestBody = request.body;
+    }
+    if (typeof requestBody !== "string") {
+      sendJson(response, 400, {
+        error: "The translation request body could not be read. Refresh the page and try again.",
+      });
+      return;
+    }
+    if (contentType.toLowerCase().includes("application/json")) {
+      let payload;
+      try {
+        payload = JSON.parse(requestBody);
+      } catch {
+        sendJson(response, 400, { error: "The translation request must contain valid JSON." });
+        return;
+      }
+      html = payload?.html;
+      targetLanguage = targetLanguage || payload?.targetLanguage;
+    } else {
+      html = requestBody;
+    }
+    if (typeof html !== "string" || !html.trim()) {
+      sendJson(response, 400, {
+        error: "The translation request did not include an HTML document. Refresh the page and try again.",
+      });
+      return;
+    }
+    if (Buffer.byteLength(html, "utf8") > maxTranslationDocumentBytes) {
+      sendJson(response, 413, { error: "HTML documents must be 100 KB or smaller for AWS Translate." });
+      return;
+    }
+    if (typeof targetLanguage !== "string" || !targetLanguage.trim()) {
+      sendJson(response, 400, { error: "Choose a supported target language." });
+      return;
+    }
+
+    try {
+      const languages = await getSupportedLanguages();
+      if (!languages.some((language) => language.LanguageCode === targetLanguage)) {
+        sendJson(response, 400, { error: "Choose a supported target language." });
+        return;
+      }
+
+      const result = await sendTranslation(new TranslateDocumentCommand({
+        Document: {
+          Content: Buffer.from(html, "utf8"),
+          ContentType: "text/html",
+        },
+        SourceLanguageCode: "en",
+        TargetLanguageCode: targetLanguage,
+      }));
+      const translatedContent = result.TranslatedDocument?.Content;
+      if (!translatedContent?.length) {
+        throw new Error("AWS Translate returned no translated HTML document.");
+      }
+
+      sendJson(response, 200, {
+        translatedHtml: Buffer.from(translatedContent).toString("utf8"),
+      });
+    } catch (error) {
+      const code = typeof error?.name === "string" ? error.name.slice(0, 80) : "TranslateError";
+      logger.error(JSON.stringify({
+        event: "aws_translate_document_failed",
+        requestId: request.requestId,
+        region: awsRegion || "SDK default",
+        targetLanguage,
+        documentBytes: Buffer.byteLength(html, "utf8"),
+        code,
+        awsRequestId: error?.$metadata?.requestId,
+        httpStatusCode: error?.$metadata?.httpStatusCode,
+      }));
+      sendJson(response, 502, {
+        error: "AWS Translate could not translate the HTML document. Please try again.",
+        diagnostic: {
+          requestId: request.requestId,
+          code,
+          region: awsRegion || "SDK default",
+        },
+      });
+    }
+  });
+
 
   app.post("/api/bedrock-diagnostic", async (request, response) => {
     if (!bedrockDiagnosticsEnabled) {
@@ -824,7 +994,8 @@ export function createAppServer(options) {
   return createHttpServer(createApp(options));
 }
 
-export const handler = serverless(createApp());
+export function createHandler(options) { return serverless(createApp(options)); }
+export const handler = createHandler();
 
 const entryPoint = process.argv[1];
 if (entryPoint && pathToFileURL(resolve(entryPoint)).href === import.meta.url) {
