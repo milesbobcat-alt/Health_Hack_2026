@@ -349,9 +349,9 @@
       .checklist-tabs button {
         min-height: 44px;
         padding: 0.5rem 0.875rem;
-        border: 0;
+        border: 1px solid var(--border);
         border-bottom: 3px solid transparent;
-        border-radius: 0;
+        border-radius: 3px;
         background: transparent;
         color: var(--link);
       }
@@ -363,9 +363,7 @@
 
       .checklist-items {
         display: grid;
-        max-height: 18rem;
-        overflow-y: scroll;
-        gap: 0.5rem;
+        gap: 0.75rem;
         margin: 0;
         padding: 0;
         list-style: none;
@@ -375,12 +373,28 @@
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        padding: 0.5rem;
+        min-height: 4rem;
+        padding: 0.75rem;
+        border: 1px solid var(--border);
         border-radius: 3px;
+        background: var(--surface);
+        font-size: 1.25rem;
+        font-weight: 600;
       }
 
       .checklist-items input {
         flex: 0 0 auto;
+        width: 28px;
+        height: 28px;
+      }
+
+      .checklist-empty {
+        margin: 0;
+        padding: 1rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background: var(--surface);
+        color: var(--muted-text);
       }
 
       .follow-up textarea,
@@ -573,8 +587,10 @@
         <a class="patient-brand" href="#overview">Homeward</a>
         <nav class="patient-nav" aria-label="Patient navigation">
           <a href="#overview" aria-current="page">Home</a>
-          <a href="#medications-tab" data-category="medications">Medications</a>
-          <a href="#wounds-tab" data-category="wounds">Wounds</a>
+          <a href="#medicine-tab" data-category="medicine">Medicine</a>
+          <a href="#woundCare-tab" data-category="woundCare">Wound Care</a>
+          <a href="#followUps-tab" data-category="followUps">Follow Ups</a>
+          <a href="#additional-tab" data-category="additional">Additional</a>
         </nav>
         <p class="patient-label">Patient</p>
       </div>
@@ -587,24 +603,13 @@
           <p class="section-description">From your after-visit summary (AVS)</p>
 
           <div class="checklist-tabs" role="tablist" aria-label="Checklist category">
-            <button id="medications-tab" type="button" role="tab" aria-selected="true" aria-controls="checklist-items" data-category="medications">Medications</button>
-            <button id="wounds-tab" type="button" role="tab" aria-selected="false" aria-controls="checklist-items" data-category="wounds" tabindex="-1">Wounds</button>
+            <button id="medicine-tab" type="button" role="tab" aria-selected="true" aria-controls="checklist-items" data-category="medicine">Medicine (0)</button>
+            <button id="woundCare-tab" type="button" role="tab" aria-selected="false" aria-controls="checklist-items" data-category="woundCare" tabindex="-1">Wound Care (0)</button>
+            <button id="followUps-tab" type="button" role="tab" aria-selected="false" aria-controls="checklist-items" data-category="followUps" tabindex="-1">Follow Ups (0)</button>
+            <button id="additional-tab" type="button" role="tab" aria-selected="false" aria-controls="checklist-items" data-category="additional" tabindex="-1">Additional (0)</button>
           </div>
 
-          <ul id="checklist-items" class="checklist-items" aria-live="polite">
-            <li>
-              <label>
-                <input type="checkbox">
-                <span>Medication checklist item from your AVS</span>
-              </label>
-            </li>
-            <li>
-              <label>
-                <input type="checkbox">
-                <span>Medication checklist item from your AVS</span>
-              </label>
-            </li>
-          </ul>
+          <ul id="checklist-items" class="checklist-items" aria-live="polite"></ul>
         </section>
 
         <section class="patient-section avs-section" aria-labelledby="avs-heading">
@@ -660,11 +665,15 @@
         const audioPlayer = document.querySelector("#patient-audio");
         const checklistTabs = [...document.querySelectorAll(".checklist-tabs [role='tab']")];
         const checklistItems = document.querySelector("#checklist-items");
-        const checkedItems = {
-          medications: [false, false],
-          wounds: [false, false],
-        };
-        let activeCategory = "medications";
+        const categories = [
+          { key: "medicine", label: "Medicine" },
+          { key: "woundCare", label: "Wound Care" },
+          { key: "followUps", label: "Follow Ups" },
+          { key: "additional", label: "Additional" },
+        ];
+        const checkedItems = Object.fromEntries(categories.map(({ key }) => [key, []]));
+        const checklist = Object.fromEntries(categories.map(({ key }) => [key, []]));
+        let activeCategory = "medicine";
         let audioUrl = null;
 
         function setStatus(message, state = "idle") {
@@ -681,27 +690,35 @@
           checkedItems[activeCategory] = [...checklistItems.querySelectorAll("input[type='checkbox']")]
             .map((checkbox) => checkbox.checked);
           activeCategory = category;
-          const labels = category === "wounds"
-            ? ["Wound-care checklist item from your AVS", "Wound-care checklist item from your AVS"]
-            : ["Medication checklist item from your AVS", "Medication checklist item from your AVS"];
 
-          checklistItems.replaceChildren(...labels.map((text, index) => {
-            const item = document.createElement("li");
-            const label = document.createElement("label");
-            const checkbox = document.createElement("input");
-            const description = document.createElement("span");
-            checkbox.type = "checkbox";
-            checkbox.checked = checkedItems[category][index];
-            description.textContent = text;
-            label.append(checkbox, description);
-            item.append(label);
-            return item;
-          }));
+          const labels = checklist[category];
+          if (labels.length === 0) {
+            const empty = document.createElement("li");
+            empty.className = "checklist-empty";
+            empty.textContent = "No instructions required for this section.";
+            checklistItems.replaceChildren(empty);
+          } else {
+            checklistItems.replaceChildren(...labels.map((text, index) => {
+              const item = document.createElement("li");
+              const label = document.createElement("label");
+              const checkbox = document.createElement("input");
+              const description = document.createElement("span");
+              checkbox.type = "checkbox";
+              checkbox.checked = checkedItems[category][index] || false;
+              description.textContent = text;
+              label.append(checkbox, description);
+              item.append(label);
+              return item;
+            }));
+          }
 
           checklistTabs.forEach((tab) => {
             const selected = tab.dataset.category === category;
             tab.setAttribute("aria-selected", String(selected));
             tab.tabIndex = selected ? 0 : -1;
+            const itemCount = checklist[tab.dataset.category].length;
+            const categoryLabel = categories.find(({ key }) => key === tab.dataset.category)?.label;
+            tab.textContent = `${categoryLabel} (${itemCount})`;
           });
         }
 
@@ -768,6 +785,14 @@
             }
 
             patientData.value = typeof result.transcript === "string" ? result.transcript : "";
+            if (result.checklist && typeof result.checklist === "object") {
+              categories.forEach(({ key }) => {
+                checklist[key] = Array.isArray(result.checklist[key])
+                  ? result.checklist[key].filter((item) => typeof item === "string")
+                  : [];
+              });
+            }
+            showChecklistCategory(activeCategory);
 
             if (result.pdfUrl) {
               pdfLink.href = result.pdfUrl;

@@ -188,6 +188,104 @@
         background-color: var(--surface);
       }
 
+      .checklist-review {
+        display: grid;
+        gap: 1rem;
+        margin-top: 1.5rem;
+        padding: 1.5rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background-color: var(--surface);
+      }
+
+      .checklist-review[hidden] {
+        display: none;
+      }
+
+      .checklist-review h2,
+      .checklist-category h3 {
+        margin: 0;
+      }
+
+      .checklist-categories {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+        gap: 1rem;
+      }
+
+      .checklist-category {
+        display: grid;
+        align-content: start;
+        gap: 0.75rem;
+        padding: 1rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+      }
+
+      .checklist-items {
+        display: grid;
+        gap: 0.75rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .checklist-item,
+      .checklist-add {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .checklist-item input,
+      .checklist-add input {
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        padding: 0.5rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+      }
+
+      .checklist-item button,
+      .checklist-add button {
+        flex: 0 0 auto;
+        min-width: 44px;
+        padding: 0.35rem 0.65rem;
+      }
+
+      .checklist-empty {
+        margin: 0;
+        color: var(--muted-text);
+      }
+
+      #generate-checklist[aria-busy="true"]::before {
+        display: inline-block;
+        width: 1em;
+        height: 1em;
+        margin-right: 0.5em;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        content: "";
+        vertical-align: -0.15em;
+        animation: checklist-spin 0.8s linear infinite;
+      }
+
+      @keyframes checklist-spin {
+        to { transform: rotate(360deg); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #generate-checklist[aria-busy="true"]::before {
+          animation-duration: 2s;
+        }
+      }
+
       .submission-card a {
         color: var(--link);
         overflow-wrap: anywhere;
@@ -433,10 +531,18 @@
         </section>
       </div>
 
+      <button id="generate-checklist" type="button">Generate AI Care Plan</button>
+      <p id="generation-status" class="submission-status" role="status" aria-live="polite"></p>
+
+      <section id="checklist-review" class="checklist-review" aria-labelledby="review-heading" hidden>
+        <h2 id="review-heading">Review AI care plan</h2>
+        <p class="card-description">Check every item against the source instructions. Edit, remove, or add items before sharing.</p>
+        <div id="checklist-categories" class="checklist-categories"></div>
+        <button id="submit-discharge" type="button">Confirm &amp; Create Patient Link</button>
+      </section>
+
       <section class="submission-card" aria-labelledby="submit-heading">
-        <h2 id="submit-heading">Create patient link</h2>
-        <p class="card-description">Submit the reviewed transcript, optionally with a PDF, to create a patient view link.</p>
-        <button id="submit-discharge" type="button">Submit &amp; Generate Patient Link</button>
+        <h2 id="submit-heading">Patient link</h2>
         <p id="submission-status" class="submission-status" role="status" aria-live="polite"></p>
         <div id="patient-link-result" hidden>
           <label for="patient-link">Patient link</label>
@@ -463,6 +569,10 @@
         const pdfInput = document.querySelector("#pdf-file");
         const pdfStatus = document.querySelector("#pdf-status");
         const removePdfButton = document.querySelector("#remove-pdf");
+        const generateButton = document.querySelector("#generate-checklist");
+        const generationStatus = document.querySelector("#generation-status");
+        const checklistReview = document.querySelector("#checklist-review");
+        const checklistCategoriesContainer = document.querySelector("#checklist-categories");
         const submitButton = document.querySelector("#submit-discharge");
         const submissionStatus = document.querySelector("#submission-status");
         const patientLinkResult = document.querySelector("#patient-link-result");
@@ -475,6 +585,107 @@
         let recordingSize = 0;
         let recordingTooLarge = false;
         let microphoneStream = null;
+        const categories = [
+          { key: "medicine", label: "Medicine" },
+          { key: "woundCare", label: "Wound Care" },
+          { key: "followUps", label: "Follow Ups" },
+          { key: "additional", label: "Additional" },
+        ];
+        let checklist = null;
+
+        function setGenerationStatus(message, state = "idle") {
+          generationStatus.textContent = message;
+          generationStatus.dataset.state = state;
+        }
+
+        function invalidateChecklist() {
+          if (!checklist) return;
+          checklist = null;
+          checklistReview.hidden = true;
+          patientLinkResult.hidden = true;
+          setGenerationStatus("The source text changed. Generate a new care plan to review the updated instructions.");
+        }
+
+        function renderCategory({ key, label }) {
+          const section = document.createElement("section");
+          section.className = "checklist-category";
+          section.setAttribute("aria-labelledby", `heading-${key}`);
+          const heading = document.createElement("h3");
+          heading.id = `heading-${key}`;
+          heading.textContent = label;
+          const items = document.createElement("ul");
+          items.className = "checklist-items";
+          items.setAttribute("aria-label", `${label} instructions`);
+
+          if (checklist[key].length === 0) {
+            const empty = document.createElement("li");
+            empty.className = "checklist-empty";
+            empty.textContent = "No specific instructions found (click + to add).";
+            items.append(empty);
+          }
+
+          checklist[key].forEach((text, index) => {
+            const item = document.createElement("li");
+            item.className = "checklist-item";
+            const input = document.createElement("input");
+            input.type = "text";
+            input.value = text;
+            input.setAttribute("aria-label", `${label} instruction ${index + 1}`);
+            input.addEventListener("input", () => {
+              checklist[key][index] = input.value;
+            });
+            input.addEventListener("change", () => {
+              checklist[key][index] = input.value.trim();
+              input.value = checklist[key][index];
+            });
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.textContent = "Remove";
+            remove.setAttribute("aria-label", `Remove ${label} instruction ${index + 1}`);
+            remove.addEventListener("click", () => {
+              checklist[key].splice(index, 1);
+              renderChecklist();
+              checklistCategoriesContainer
+                .querySelector(`[aria-label="New ${label.toLowerCase()} instruction"]`)
+                ?.focus();
+            });
+            item.append(input, remove);
+            items.append(item);
+          });
+
+          const addForm = document.createElement("form");
+          addForm.className = "checklist-add";
+          const addInput = document.createElement("input");
+          addInput.type = "text";
+          addInput.placeholder = `Add a ${label.toLowerCase()} instruction`;
+          addInput.setAttribute("aria-label", `New ${label.toLowerCase()} instruction`);
+          const addButton = document.createElement("button");
+          addButton.type = "submit";
+          addButton.textContent = "+";
+          addButton.setAttribute("aria-label", `Add ${label} instruction`);
+          addForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            const value = addInput.value.trim();
+            if (!value) {
+              addInput.focus();
+              return;
+            }
+            checklist[key].push(value);
+            renderChecklist();
+            checklistCategoriesContainer
+              .querySelector(`[aria-label="New ${label.toLowerCase()} instruction"]`)
+              ?.focus();
+          });
+          addForm.append(addInput, addButton);
+          section.append(heading, items, addForm);
+          return section;
+        }
+
+        function renderChecklist() {
+          checklistCategoriesContainer.replaceChildren(...categories.map(renderCategory));
+        }
+
+        transcriptField.addEventListener("input", invalidateChecklist);
 
         function setPdfStatus(message, state = "idle") {
           pdfStatus.textContent = message;
@@ -482,6 +693,7 @@
         }
 
         pdfInput.addEventListener("change", () => {
+          invalidateChecklist();
           const [file] = pdfInput.files;
           if (!file) {
             removePdfButton.hidden = true;
@@ -503,59 +715,173 @@
 
         removePdfButton.addEventListener("click", () => {
           pdfInput.value = "";
+          invalidateChecklist();
           removePdfButton.hidden = true;
           setPdfStatus("PDF removed.");
           pdfInput.focus();
         });
 
-        submitButton.addEventListener("click", async () => {
+        generateButton.addEventListener("click", async () => {
           const transcript = transcriptField.value.trim();
           const [pdfFile] = pdfInput.files;
-          patientLinkResult.hidden = true;
 
           if (!transcript) {
-            submissionStatus.textContent = "Add or record the discharge transcript before submitting.";
-            submissionStatus.dataset.state = "error";
+            setGenerationStatus("Add or record the discharge transcript before generating a care plan.", "error");
             transcriptField.focus();
+            return;
+          }
+          if (!stopButton.disabled || startButton.disabled) {
+            setGenerationStatus("Stop the active recording and wait for transcription before generating a care plan.", "error");
+            if (!stopButton.disabled) stopButton.focus();
             return;
           }
           const formData = new FormData();
           formData.append("transcript", transcript);
           if (pdfFile) formData.append("pdfFile", pdfFile);
-          submitButton.disabled = true;
-          submissionStatus.textContent = pdfFile
-            ? "Saving discharge details and uploading PDF…"
-            : "Saving discharge details…";
-          submissionStatus.dataset.state = "loading";
+          checklist = null;
+          checklistReview.hidden = true;
+          patientLinkResult.hidden = true;
+          submissionStatus.textContent = "";
+          generateButton.disabled = true;
+          generateButton.setAttribute("aria-busy", "true");
+          startButton.disabled = true;
+          transcriptField.disabled = true;
+          pdfInput.disabled = true;
+          removePdfButton.disabled = true;
+          setGenerationStatus("Generating care plan from the provided instructions…", "loading");
 
+          let requestId = null;
+          let responseStatus = null;
           try {
-            const response = await fetch("/api/discharge", {
+            const response = await fetch("/api/generate-checklist", {
               method: "POST",
               body: formData,
             });
+            responseStatus = response.status;
+            requestId = response.headers.get("x-request-id");
+            const responseText = await response.text();
+            let result = null;
+            let parseError = null;
+            try {
+              result = JSON.parse(responseText);
+            } catch (error) {
+              parseError = error;
+            }
+            if (!response.ok && !result) {
+              throw new Error(
+                `Server returned HTTP ${response.status} without a JSON error response.`
+                + `${requestId ? ` Request ID: ${requestId}.` : ""}`
+                + " Check the API Gateway route and Lambda integration.",
+              );
+            }
+            if (result === null) {
+              throw new Error(`The server returned an invalid JSON response: ${parseError.message}`);
+            }
+            if (!response.ok) {
+              const diagnostic = result.diagnostic;
+              const details = diagnostic
+                ? ` (${diagnostic.code || "Error"} during ${diagnostic.stage || "generation"}`
+                  + `${diagnostic.region ? `, region ${diagnostic.region}` : ""}`
+                  + `${diagnostic.modelId ? `, model ${diagnostic.modelId}` : ""}`
+                  + `${diagnostic.message ? `: ${diagnostic.message}` : ""})`
+                : ` (HTTP ${response.status}; server did not provide a Bedrock diagnostic)`;
+              throw new Error(
+                `${result.error || "The care plan could not be generated."}${details}`
+                + `${requestId && !diagnostic?.requestId ? ` Request ID: ${requestId}.` : ""}`,
+              );
+            }
+            const validChecklist = result.checklist
+              && categories.every(({ key }) => Array.isArray(result.checklist[key])
+                && result.checklist[key].every((item) => typeof item === "string"));
+            if (!validChecklist) throw new Error("The server returned an invalid checklist.");
+            checklist = Object.fromEntries(categories.map(
+              ({ key }) => [key, result.checklist[key].map((item) => item.trim()).filter(Boolean)],
+            ));
+            renderChecklist();
+            checklistReview.hidden = false;
+            setGenerationStatus("Care plan ready. Review and edit every item before sharing.", "success");
+            checklistReview.scrollIntoView({ behavior: "smooth", block: "start" });
+          } catch (error) {
+            console.error("Checklist generation request failed.", {
+              requestId,
+              status: responseStatus,
+              message: error.message,
+            });
+            setGenerationStatus(error instanceof TypeError
+              ? "Could not reach the care plan server. Try again when the connection is available."
+              : error.message, "error");
+          } finally {
+            generateButton.disabled = false;
+            generateButton.removeAttribute("aria-busy");
+            startButton.disabled = false;
+            transcriptField.disabled = false;
+            pdfInput.disabled = false;
+            removePdfButton.disabled = false;
+          }
+        });
+
+        submitButton.addEventListener("click", async () => {
+          const transcript = transcriptField.value.trim();
+          const [pdfFile] = pdfInput.files;
+          if (!checklist) {
+            setGenerationStatus("Generate and review a care plan before creating a patient link.", "error");
+            return;
+          }
+          const formData = new FormData();
+          formData.append("transcript", transcript);
+          const finalChecklist = Object.fromEntries(categories.map(({ key }) => [
+            key,
+            checklist[key].map((item) => item.trim()).filter(Boolean),
+          ]));
+          formData.append("checklist", JSON.stringify(finalChecklist));
+          if (pdfFile) formData.append("pdfFile", pdfFile);
+          submitButton.disabled = true;
+          startButton.disabled = true;
+          transcriptField.disabled = true;
+          pdfInput.disabled = true;
+          removePdfButton.disabled = true;
+          checklistReview.querySelectorAll("input, button").forEach((control) => {
+            control.disabled = true;
+          });
+          patientLinkResult.hidden = true;
+          submissionStatus.textContent = pdfFile
+            ? "Saving the verified care plan and uploading PDF…"
+            : "Saving the verified care plan…";
+          submissionStatus.dataset.state = "loading";
+          let saved = false;
+
+          try {
+            const response = await fetch("/api/discharge", { method: "POST", body: formData });
             let result;
             try {
               result = await response.json();
             } catch {
               throw new Error("The server returned an invalid response.");
             }
-            if (!response.ok) {
-              throw new Error(result.error || "The discharge could not be saved.");
-            }
-
+            if (!response.ok) throw new Error(result.error || "The discharge could not be saved.");
             const absoluteLink = new URL(result.patientLink, window.location.href).href;
             patientLinkField.value = absoluteLink;
             openLink.href = absoluteLink;
             patientLinkResult.hidden = false;
             submissionStatus.textContent = "Discharge saved. Share this link with the patient.";
             submissionStatus.dataset.state = "success";
+            saved = true;
+            patientLinkResult.scrollIntoView({ behavior: "smooth", block: "nearest" });
           } catch (error) {
             submissionStatus.textContent = error instanceof TypeError
               ? "Could not reach the discharge server. Try again when the connection is available."
               : error.message;
             submissionStatus.dataset.state = "error";
           } finally {
-            submitButton.disabled = false;
+            if (!saved) {
+              transcriptField.disabled = false;
+              startButton.disabled = false;
+              pdfInput.disabled = false;
+              removePdfButton.disabled = false;
+              checklistReview.querySelectorAll("input, button").forEach((control) => {
+                control.disabled = false;
+              });
+            }
           }
         });
 
@@ -585,6 +911,8 @@
         function resetControls() {
           startButton.disabled = false;
           stopButton.disabled = true;
+          generateButton.disabled = false;
+          submitButton.disabled = !checklist;
           document.querySelector("#care-instructions-card")
             .removeAttribute("aria-busy");
         }
@@ -710,6 +1038,8 @@
               setStatus("The recording failed. Please try again.", "error");
             }, { once: true });
             mediaRecorder.start(1000);
+            generateButton.disabled = true;
+            submitButton.disabled = true;
             stopButton.disabled = false;
             setStatus("Recording. Select Stop and transcribe when finished.", "recording");
           } catch (error) {
