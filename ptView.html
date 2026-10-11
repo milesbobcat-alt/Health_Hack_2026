@@ -567,7 +567,7 @@
       }
     </style>
   </head>
-  <body>
+  <body data-translate-values="true">
     <header class="patient-header">
       <div class="patient-header-inner">
         <a class="patient-brand" href="#overview">Homeward</a>
@@ -622,6 +622,7 @@
           <label for="patient-data">Care suggestions</label>
           <textarea
             id="patient-data"
+            data-translate-value
             name="patient-data"
             rows="4"
             maxlength="5000"
@@ -888,5 +889,6 @@
         void loadDischarge();
       })();
     </script>
+    <script src="/translate.js" defer></script>
   </body>
 </html>

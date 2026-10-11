@@ -19,6 +19,11 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import {
+  ListLanguagesCommand,
+  TranslateClient,
+  TranslateTextCommand,
+} from "@aws-sdk/client-translate";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const projectDirectory = import.meta.dirname;
@@ -26,6 +31,8 @@ const defaultMaxAudioBytes = 25 * 1024 * 1024;
 const maxPdfBytes = 20 * 1024 * 1024;
 const maxSpeechTextCharacters = 5000;
 const maxTranscriptBytes = 300 * 1024;
+const maxTranslationTextBytes = 10_000;
+const maxTranslationTexts = 250;
 const transcriptionUrl = "https://api.elevenlabs.io/v1/speech-to-text";
 const speechUrl = "https://api.elevenlabs.io/v1/text-to-speech";
 const dischargeLifetimeSeconds = 30 * 24 * 60 * 60;
@@ -51,6 +58,7 @@ function createApp({
   bucketName = process.env.S3_BUCKET_NAME,
   dynamoClient,
   s3Client,
+  translateClient,
   getSignedUrlImpl = getSignedUrl,
   idGenerator = uuidv4,
   now = Date.now,
@@ -60,6 +68,7 @@ function createApp({
   const documentClient = dynamoClient
     || DynamoDBDocumentClient.from(new DynamoDBClient({ region: awsRegion }));
   const objectClient = s3Client || new S3Client({ region: awsRegion });
+  const translationClient = translateClient || new TranslateClient({ region: awsRegion });
   const pdfUpload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: uploadLimit, files: 1, fields: 1 },
@@ -85,6 +94,108 @@ function createApp({
         }
       },
     );
+  });
+  app.get("/translate.js", (request, response) => {
+    response.set("Cache-Control", "no-store").sendFile(
+      resolve(projectDirectory, "translate.js"),
+      (error) => {
+        if (error && !response.headersSent) {
+          sendJson(response, 500, { error: "The translation controls could not be loaded." });
+        }
+      },
+    );
+  });
+
+  let supportedLanguagesPromise;
+  async function getSupportedLanguages() {
+    if (!supportedLanguagesPromise) {
+      supportedLanguagesPromise = (async () => {
+        const languages = [];
+        let nextToken;
+        do {
+          const result = await translationClient.send(new ListLanguagesCommand({
+            DisplayLanguageCode: "en",
+            ...(nextToken && { NextToken: nextToken }),
+          }));
+          languages.push(...(result.Languages || []));
+          nextToken = result.NextToken;
+        } while (nextToken);
+        return languages;
+      })().catch((error) => {
+        supportedLanguagesPromise = undefined;
+        throw error;
+      });
+    }
+    return supportedLanguagesPromise;
+  }
+
+  app.get("/api/translate/languages", async (request, response) => {
+    try {
+      const languages = await getSupportedLanguages();
+      sendJson(response, 200, {
+        languages: languages
+          .filter((language) => language.LanguageCode && language.LanguageName)
+          .sort((left, right) => left.LanguageName.localeCompare(right.LanguageName))
+          .map(({ LanguageCode, LanguageName }) => ({
+            code: LanguageCode,
+            name: LanguageName,
+          })),
+      });
+    } catch (error) {
+      console.error("Failed to list AWS Translate languages.", error);
+      sendJson(response, 502, { error: "Available languages could not be loaded from AWS Translate." });
+    }
+  });
+
+  app.post("/api/translate", express.json({ limit: "100kb" }), async (request, response) => {
+    const { texts, targetLanguage } = request.body || {};
+    if (!Array.isArray(texts) || texts.length < 1 || texts.length > maxTranslationTexts
+      || texts.some((text) => typeof text !== "string" || !text.trim()
+        || Buffer.byteLength(text, "utf8") > maxTranslationTextBytes)) {
+      sendJson(response, 400, {
+        error: `Provide 1 to ${maxTranslationTexts} non-empty text values, each no larger than ${maxTranslationTextBytes} bytes.`,
+      });
+      return;
+    }
+    if (typeof targetLanguage !== "string" || !targetLanguage.trim()) {
+      sendJson(response, 400, { error: "Choose a supported target language." });
+      return;
+    }
+
+    try {
+      const languages = await getSupportedLanguages();
+      if (!languages.some((language) => language.LanguageCode === targetLanguage)) {
+        sendJson(response, 400, { error: "Choose a supported target language." });
+        return;
+      }
+
+      const uniqueTexts = [...new Set(texts)];
+      const translatedUniqueTexts = new Map();
+      let nextIndex = 0;
+      const workerCount = Math.min(5, uniqueTexts.length);
+      await Promise.all(Array.from({ length: workerCount }, async () => {
+        while (nextIndex < uniqueTexts.length) {
+          const index = nextIndex;
+          nextIndex += 1;
+          const result = await translationClient.send(new TranslateTextCommand({
+            Text: uniqueTexts[index],
+            SourceLanguageCode: "auto",
+            TargetLanguageCode: targetLanguage,
+          }));
+          if (typeof result.TranslatedText !== "string") {
+            throw new Error("AWS Translate returned no translated text.");
+          }
+          translatedUniqueTexts.set(uniqueTexts[index], result.TranslatedText);
+        }
+      }));
+
+      sendJson(response, 200, {
+        translatedTexts: texts.map((text) => translatedUniqueTexts.get(text)),
+      });
+    } catch (error) {
+      console.error("Failed to translate page text with AWS Translate.", error);
+      sendJson(response, 502, { error: "AWS Translate could not translate the page. Please try again." });
+    }
   });
 
   app.post(
