@@ -36,3 +36,49 @@ provide `bedrock-mantle:CreateInference`, S3, DynamoDB, and CloudWatch Logs
 access through the Lambda execution role. API
 Gateway must use a Lambda proxy integration so the handler receives the API
 Gateway event and can return its status, headers, and body.
+
+## FHIR patient and medication viewer
+
+Use Node.js 22 or later. From this project folder:
+
+```sh
+npm install
+cp -n .env.example .env
+# Fill in the team's AWS settings and optional ElevenLabs values in .env.
+# Use your configured AWS profile for AWS access (no access keys in .env).
+PORT=3121 npm start
+```
+
+Open http://127.0.0.1:3121/. FHIR search works without AWS credentials: search
+`Omar Abernathy`, select the match explicitly, and expand **Medication statement**.
+Statement and prescription records are separate sources; missing information is not
+invented, and strength is separate from dose. Loading, empty, error, and paginated
+search states are supported. `FHIR_BASE_URL` configures the only allowed upstream
+server; requests use a 15-second timeout. This is a synthetic sandbox FHIR
+connection, not a production EHR authorization integration.
+
+Patient changes require confirmation before clearing text, PDFs, AI plans, and
+patient-link details. Finish recording/generation/saving first. FHIR selection is
+stored in page state only; it is not sent to Bedrock, used to populate a medication
+comparison, or added to persisted discharge records in this step.
+
+Test with `npm test` (AWS, Bedrock, and FHIR services are mocked). Browser checks:
+search/select a patient, expand medications, enter synthetic instructions, change
+patient, cancel to keep the draft, then confirm to clear it. With your authorized
+AWS setup, separately verify Generate AI Care Plan, review/edit, and patient links.
+These AWS actions require the existing model/region permissions, DynamoDB table,
+and an S3 bucket for PDF storage. Missing AWS setup is reported as an error; no
+hardcoded checklist fallback is added.
+
+Include `fhir.mjs`, `patient-state.mjs`, and `patient-viewer.mjs` in the Lambda
+package alongside the existing files. Production EHR connections may need SMART
+on FHIR authorization and suitable permissions.
+
+
+Verification on 2026-10-11: 49 mocked automated tests passed. Live sandbox
+search for Omar Abernathy and retrieval of his statement/prescription records
+passed. Browser checks covered Enter search, explicit selection, medication
+expansion, mock AI review/link creation, and cancel/confirm patient changes.
+Bedrock, DynamoDB, and S3 were mocked; no paid AWS requests were made and live
+AWS behavior has not been verified for this integration. Audio capture was not
+retested live. No push or deployment was performed.

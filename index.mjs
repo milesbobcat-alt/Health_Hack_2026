@@ -1,3 +1,4 @@
+import { createFhirClient, DEFAULT_FHIR_BASE_URL } from "./fhir.mjs";
 import "dotenv/config";
 import express from "express";
 import multer from "multer";
@@ -142,6 +143,9 @@ function createApp({
   speechModelId = process.env.ELEVENLABS_TTS_MODEL_ID || "eleven_multilingual_v2",
   voiceId = process.env.ELEVENLABS_VOICE_ID,
   fetchImpl = fetch,
+  fhirBaseUrl = process.env.FHIR_BASE_URL || DEFAULT_FHIR_BASE_URL,
+  fhirFetchImpl = fetch,
+  fhirTimeoutMs = 15000,
   maxAudioBytes = defaultMaxAudioBytes,
   awsRegion = process.env.AWS_REGION,
   tableName = process.env.DYNAMODB_TABLE_NAME,
@@ -159,6 +163,7 @@ function createApp({
   logger = console,
 } = {}) {
   const app = express();
+  const fhir = createFhirClient({ baseUrl: fhirBaseUrl, fetchImpl: fhirFetchImpl, timeoutMs: fhirTimeoutMs });
   const documentClient = dynamoClient
     || DynamoDBDocumentClient.from(new DynamoDBClient({ region: awsRegion }));
   const modelClient = bedrockClient || new AnthropicBedrockMantle({
@@ -228,6 +233,51 @@ function createApp({
         }
       },
     );
+  });
+
+  for (const file of ['patient-state.mjs', 'patient-viewer.mjs']) {
+    app.get(`/${file}`, (request, response) => {
+      response.set('Cache-Control', 'no-store').type('text/javascript').sendFile(resolve(projectDirectory, file));
+    });
+  }
+  app.use((request, response, next) => {
+    const url = new URL(request.originalUrl, 'http://localhost');
+    if (url.pathname !== '/api/patients' && !url.pathname.startsWith('/api/patients/')) return next();
+    void (async () => {
+      if (request.method !== "GET") {
+        response.setHeader("Allow", "GET");
+        sendJson(response, 405, { error: "Use GET to search or select patients." });
+        return;
+      }
+      try {
+        let result;
+        if (url.pathname === "/api/patients") {
+          if ([...url.searchParams.keys()].some(key => !["name", "cursor"].includes(key)) ||
+              url.searchParams.getAll("name").length > 1 || url.searchParams.getAll("cursor").length > 1) {
+            sendJson(response, 400, { error: "Provide only a name or a results-page cursor." });
+            return;
+          }
+          result = await fhir.searchPatients({
+            name: url.searchParams.get("name") ?? undefined,
+            cursor: url.searchParams.get("cursor") ?? undefined,
+          });
+        } else {
+          if (url.search) {
+            sendJson(response, 400, { error: "Patient retrieval does not accept query parameters." });
+            return;
+          }
+          const medicationPath = url.pathname.match(/^\/api\/patients\/([^/]+)\/medication-(statements|requests)$/);
+          result = medicationPath
+            ? await (medicationPath[2] === 'requests' ? fhir.getMedicationRequests(medicationPath[1]) : fhir.getMedicationStatements(medicationPath[1]))
+            : await fhir.getPatient(url.pathname.slice("/api/patients/".length));
+        }
+        sendJson(response, 200, result);
+      } catch (error) {
+        sendJson(response, error.status || 502, { error: error.status ? error.message : "The FHIR sandbox request failed. Please try again." });
+      }
+    })().catch(() => {
+      if (!response.headersSent) sendJson(response, 502, { error: 'The FHIR sandbox request failed. Please try again.' });
+    });
   });
 
   app.post("/api/bedrock-diagnostic", async (request, response) => {

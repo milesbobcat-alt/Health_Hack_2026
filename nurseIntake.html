@@ -479,6 +479,47 @@
           transition-duration: 0.01ms !important;
         }
       }
+      .patient-card { margin-bottom: 1rem; padding: .75rem 1rem; gap: .35rem; border-radius: 3px; }
+      #patient-name-help { max-width: none; margin: 0; color: var(--muted-text); }
+      #patient-status { max-width: none; margin: 0; color: var(--muted-text); font-size: .8rem; }
+      #patient-status:empty { display: none; }
+      .patient-search-form { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+      .patient-search-field { flex: 1 1 18rem; display: flex; gap: .6rem; align-items: center; }
+      .patient-search-field label { white-space: nowrap; font-size: .9rem; }
+      .patient-search-field input { flex: 1; width: 0; min-width: 0; padding: .45rem .6rem; border: 1px solid var(--border); border-radius: 3px; background: var(--surface); color: var(--text); font: inherit; }
+      .patient-card button { padding: .45rem .75rem; font-size: .9rem; }
+      .patient-results { list-style: none; padding: 0; margin: 0; max-height: 16rem; overflow-y: auto; }
+      .patient-results li { border-top: 1px solid var(--border); padding: .65rem 0; }
+      .patient-results p, #selected-patient p { margin: 0 0 .4rem; overflow-wrap: anywhere; }
+      #selected-patient { border: 1px solid var(--border); border-radius: 3px; padding: .65rem .75rem; margin-top: .35rem; }
+      #selected-patient h3 { margin: 0 0 .3rem; font-size: 1rem; }
+      #selected-patient-details { max-width: none; font-size: .85rem; color: var(--muted-text); }
+      #patient-change-confirmation { border: 1px solid var(--border); border-radius: 3px; padding: .75rem; margin-block: .35rem; }
+      #patient-change-confirmation h3 { margin-top: 0; }
+      #medication-details { margin-block: .35rem; }
+      #medication-details > summary { color: var(--link); text-decoration: underline; cursor: pointer; padding-block: .35rem; font-size: .95rem; }
+      #medication-details summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+      #medication-status { font-size: .8rem; color: var(--muted-text); }
+      #medication-list { list-style: none; padding: 0 .35rem 0 0; margin: .4rem 0; max-height: min(16rem, 40vh); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+      #medication-list > li { margin: .35rem 0; }
+      #medication-list .medication-group { margin-top: .6rem; }
+      #medication-list .medication-group h3 { font-size: .9rem; margin: .2rem 0; }
+      .medication-record { border: 1px solid var(--border); border-radius: 3px; padding: .5rem .65rem; }
+      .medication-record > summary { cursor: pointer; font-size: .9rem; font-weight: 600; overflow-wrap: anywhere; }
+      .medication-record > summary::marker { color: var(--link); }
+      .medication-status-badge { display: inline-block; margin-left: .5rem; color: var(--muted-text); font-size: .75rem; font-weight: 400; }
+      .medication-record > p { font-size: .8rem; color: var(--muted-text); }
+      #medication-list h5 { margin: .5rem 0 .25rem; }
+      #medication-list dl { display: grid; grid-template-columns: minmax(7rem, 32%) minmax(0, 1fr); gap: .2rem .65rem; margin: .5rem 0; font-size: .85rem; }
+      #medication-list dt { font-weight: 600; }
+      #medication-list dd { margin: 0; overflow-wrap: anywhere; }
+      #medication-status[data-state="error"], #patient-status[data-state="error"] { color: var(--error); }
+      @media (max-width: 36rem) {
+        .patient-search-field { flex-direction: column; align-items: stretch; gap: .2rem; }
+        .patient-search-field input { width: 100%; }
+        #medication-list dl { grid-template-columns: 1fr; gap: .15rem; }
+        #medication-list dd { margin-bottom: .3rem; }
+      }
     </style>
   </head>
   <body>
@@ -495,9 +536,40 @@
         <p>Record spoken instructions or paste text from the electronic medical record.</p>
       </section>
 
+      <section class="source-card patient-card" aria-labelledby="patient-heading">
+        <h2 id="patient-heading">Find Patient</h2>
+        <form id="patient-search-form" class="patient-search-form">
+          <div class="patient-search-field">
+            <input id="patient-name" aria-label="Patient name" name="name" type="search" required maxlength="100" autocomplete="off" placeholder="First name, last name, or first and last name" aria-describedby="patient-name-help">
+          </div>
+          <button type="submit">Search</button>
+        </form>
+        <p id="patient-name-help" class="card-description">First name, last name, or first + last. For compound surnames, try the first word.</p>
+        <p id="patient-status" role="status" aria-live="polite"></p>
+        <div id="selected-patient" hidden>
+          <h3>Selected patient</h3>
+          <p id="selected-patient-details"></p>
+          <details id="medication-details">
+            <summary>Medication statement</summary>
+            <p id="medication-status" role="status" aria-live="polite"></p>
+            <ul id="medication-list" aria-label="Medication statements"></ul>
+            <button id="medication-retry" type="button" hidden>Retry medications</button>
+          </details>
+          <button id="change-patient" type="button">Change patient</button>
+        </div>
+        <div id="patient-change-confirmation" role="group" aria-labelledby="patient-change-heading" hidden>
+          <h3 id="patient-change-heading">Clear the current draft?</h3>
+          <p>Changing patient will clear the current care instructions, PDF, AI care plan, and patient-link details.</p>
+          <button id="confirm-patient-change" type="button">Clear draft and continue</button>
+          <button id="cancel-patient-change" type="button">Cancel</button>
+        </div>
+        <ul id="patient-results" class="patient-results" aria-label="Matching patients"></ul>
+        <button id="load-more-patients" type="button" hidden>Load more</button>
+      </section>
+
       <div class="source-options">
         <section id="care-instructions-card" class="source-card" aria-labelledby="care-heading">
-          <h2 id="care-heading">Care instructions</h2>
+          <h2 id="care-heading">Care Instructions</h2>
           <p class="card-description">Type instructions from the EMR or record them using your microphone.</p>
           <div class="recording-placeholder">
             <p id="recording-help">Record care instructions and review the transcript below.</p>
@@ -559,7 +631,8 @@
         <p>Only record information approved for your organization's privacy requirements, and review the transcript for accuracy.</p>
       </div>
     </main>
-    <script>
+    <script type="module">
+      import { initializePatientViewer } from "/patient-viewer.mjs";
       (() => {
         const maxRecordingBytes = 25 * 1024 * 1024;
         const startButton = document.querySelector("#start-recording");
@@ -592,6 +665,23 @@
           { key: "additional", label: "Additional" },
         ];
         let checklist = null;
+        let careVersion = 0;
+        initializePatientViewer({
+          hasDraft: () => Boolean(transcriptField.value || pdfInput.files.length || checklist || !patientLinkResult.hidden),
+          isBusy: () => startButton.disabled && patientLinkResult.hidden,
+          clearDraft: () => {
+            careVersion++;
+            transcriptField.value = ''; pdfInput.value = ''; checklist = null;
+            checklistCategoriesContainer.replaceChildren(); checklistReview.hidden = true;
+            patientLinkResult.hidden = true; patientLinkField.value = ''; openLink.removeAttribute('href');
+            removePdfButton.hidden = true; submissionStatus.textContent = ''; submissionStatus.dataset.state = 'idle';
+            setPdfStatus(''); setStatus(''); setGenerationStatus('');
+            generateButton.disabled = false; generateButton.removeAttribute('aria-busy');
+            startButton.disabled = false; stopButton.disabled = true;
+            transcriptField.disabled = false; pdfInput.disabled = false; removePdfButton.disabled = false;
+            submitButton.disabled = true;
+          },
+        });
 
         function setGenerationStatus(message, state = "idle") {
           generationStatus.textContent = message;
@@ -722,6 +812,7 @@
         });
 
         generateButton.addEventListener("click", async () => {
+          const version = careVersion;
           const transcript = transcriptField.value.trim();
           const [pdfFile] = pdfInput.files;
 
@@ -757,6 +848,7 @@
               method: "POST",
               body: formData,
             });
+            if (version !== careVersion) return;
             responseStatus = response.status;
             requestId = response.headers.get("x-request-id");
             const responseText = await response.text();
@@ -790,6 +882,7 @@
                 + `${requestId && !diagnostic?.requestId ? ` Request ID: ${requestId}.` : ""}`,
               );
             }
+            if (version !== careVersion) return;
             const validChecklist = result.checklist
               && categories.every(({ key }) => Array.isArray(result.checklist[key])
                 && result.checklist[key].every((item) => typeof item === "string"));
@@ -799,9 +892,11 @@
             ));
             renderChecklist();
             checklistReview.hidden = false;
+            submitButton.disabled = false;
             setGenerationStatus("Care plan ready. Review and edit every item before sharing.", "success");
             checklistReview.scrollIntoView({ behavior: "smooth", block: "start" });
           } catch (error) {
+            if (version !== careVersion) return;
             console.error("Checklist generation request failed.", {
               requestId,
               status: responseStatus,
@@ -811,6 +906,7 @@
               ? "Could not reach the care plan server. Try again when the connection is available."
               : error.message, "error");
           } finally {
+            if (version !== careVersion) return;
             generateButton.disabled = false;
             generateButton.removeAttribute("aria-busy");
             startButton.disabled = false;
@@ -821,6 +917,7 @@
         });
 
         submitButton.addEventListener("click", async () => {
+          const version = careVersion;
           const transcript = transcriptField.value.trim();
           const [pdfFile] = pdfInput.files;
           if (!checklist) {
@@ -858,6 +955,7 @@
             } catch {
               throw new Error("The server returned an invalid response.");
             }
+            if (version !== careVersion) return;
             if (!response.ok) throw new Error(result.error || "The discharge could not be saved.");
             const absoluteLink = new URL(result.patientLink, window.location.href).href;
             patientLinkField.value = absoluteLink;
@@ -868,11 +966,13 @@
             saved = true;
             patientLinkResult.scrollIntoView({ behavior: "smooth", block: "nearest" });
           } catch (error) {
+            if (version !== careVersion) return;
             submissionStatus.textContent = error instanceof TypeError
               ? "Could not reach the discharge server. Try again when the connection is available."
               : error.message;
             submissionStatus.dataset.state = "error";
           } finally {
+            if (version !== careVersion) return;
             if (!saved) {
               transcriptField.disabled = false;
               startButton.disabled = false;
