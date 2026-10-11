@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Patient View</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Open Sans", Arial, sans-serif;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        --page-background: #f2f2f2;
+        --surface: #ffffff;
+        --text: #1f1f1f;
+        --muted-text: #595959;
+        --placeholder: #737373;
+        --link: #3834a8;
+        --visited-link: #9a5ba5;
+        --accent: #db0084;
+        --accent-action: #b0006a;
+        --border: #767676;
+        --disabled-background: #e0e0e0;
+        --disabled-text: #595959;
+        --focus: #a00060;
+        --error: #b20000;
+      }
+
+      :root[data-theme="beige"] {
+        --page-background: #f5f0e6;
+        --surface: #fffdf8;
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --page-background: #1f1f1f;
+        --surface: #292929;
+        --text: #f5f5f5;
+        --muted-text: #d0d0d0;
+        --placeholder: #c2c2c2;
+        --link: #d478ff;
+        --visited-link: #e6a6ff;
+        --accent: #db0084;
+        --accent-action: #b0006a;
+        --border: #b8b8b8;
+        --disabled-background: #454545;
+        --disabled-text: #d0d0d0;
+        --focus: #ff83ca;
+        --error: #ff8585;
+      }
+
+      html {
+        min-height: 100%;
+        font-size: 100%;
+        background-color: var(--page-background);
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        background-color: var(--page-background);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 1.25rem;
+        font-weight: 400;
+        line-height: 1.5;
+        letter-spacing: 0.01em;
+        word-spacing: 0.08em;
+        text-align: left;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6 {
+        color: var(--text);
+        font-weight: 600;
+        line-height: 1.35;
+        text-align: left;
+      }
+
+      p {
+        max-width: 70ch;
+        margin-block: 0 2em;
+      }
+
+      a {
+        color: var(--link);
+        text-decoration: underline;
+        text-underline-offset: 0.15em;
+      }
+
+      a:visited {
+        color: var(--visited-link);
+      }
+
+      a:hover {
+        text-decoration-color: var(--accent);
+        text-decoration-thickness: 0.15em;
+      }
+
+      :focus-visible {
+        outline: 3px dashed var(--focus);
+        outline-offset: 3px;
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        color: var(--text);
+        font: inherit;
+      }
+
+      button,
+      input[type="button"],
+      input[type="submit"],
+      input[type="reset"],
+      .button {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 1.25rem 1.875rem;
+        border: 2px solid var(--link);
+        border-radius: 3px;
+        background-color: var(--link);
+        color: #ffffff;
+        cursor: pointer;
+        text-align: center;
+      }
+
+      button:disabled,
+      input:disabled,
+      select:disabled,
+      textarea:disabled,
+      .button[aria-disabled="true"] {
+        border-color: var(--disabled-background);
+        background-color: var(--disabled-background);
+        color: var(--disabled-text);
+        cursor: not-allowed;
+      }
+
+      .button-secondary {
+        border-color: var(--link);
+        background-color: var(--surface);
+        color: var(--link);
+      }
+
+      .button-tertiary {
+        border-color: transparent;
+        background-color: transparent;
+        color: var(--link);
+        text-decoration: underline;
+      }
+
+      @media (hover: hover) {
+        button:not(:disabled):hover,
+        input[type="button"]:not(:disabled):hover,
+        input[type="submit"]:not(:disabled):hover,
+        input[type="reset"]:not(:disabled):hover,
+        .button:not([aria-disabled="true"]):hover {
+          border-color: var(--accent-action);
+          background-color: var(--accent-action);
+        }
+
+        .button-secondary:not([aria-disabled="true"]):hover {
+          color: #ffffff;
+        }
+
+        .button-tertiary:not([aria-disabled="true"]):hover {
+          background-color: var(--surface);
+          color: var(--accent-action);
+        }
+      }
+
+      input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]),
+      select,
+      textarea {
+        box-sizing: border-box;
+        min-height: 3rem;
+        padding: 0.65rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background-color: var(--surface);
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+        border: 2px solid var(--link);
+      }
+
+      input::placeholder,
+      textarea::placeholder {
+        color: var(--placeholder);
+        opacity: 1;
+      }
+
+      input[type="search"] {
+        min-width: 27ch;
+      }
+
+      input[type="checkbox"],
+      input[type="radio"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--link);
+      }
+
+      label {
+        display: inline-block;
+        min-height: 44px;
+        padding: 0.5rem 0.25rem;
+        color: var(--text);
+      }
+
+      form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1rem;
+      }
+
+      [aria-invalid="true"],
+      .field-error {
+        border-color: var(--error);
+      }
+
+      .field-error {
+        color: var(--error);
+      }
+
+      [role="tab"][aria-selected="true"],
+      .tab[aria-selected="true"] {
+        border-bottom: 3px solid var(--link);
+        color: var(--link);
+        font-weight: 600;
+      }
+
+      :root[data-text-spacing="wide"] body {
+        line-height: 1.5;
+        letter-spacing: 0.2em;
+        word-spacing: 0.16em;
+      }
+
+      ::selection {
+        background-color: var(--link);
+        color: #ffffff;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section aria-labelledby="patient-information-heading">
+        <h1 id="patient-information-heading">Patient information</h1>
+        <p>Transferred patient information will appear below. Review it before listening.</p>
+
+        <label for="patient-data">Patient information</label>
+        <textarea
+          id="patient-data"
+          name="patient-data"
+          rows="12"
+          maxlength="5000"
+          aria-describedby="speech-privacy-note"
+          placeholder="Patient information will appear here"
+        ></textarea>
+
+        <p id="speech-privacy-note">
+          Read aloud sends this text to the configured ElevenLabs account to generate audio.
+          Use this only if your organization has approved sending this information to that service.
+        </p>
+
+        <label for="speech-approval">
+          <input id="speech-approval" type="checkbox">
+          I confirm this text is approved for processing by ElevenLabs.
+        </label>
+
+        <div>
+          <button id="read-aloud" type="button">Read aloud</button>
+          <button id="stop-reading" type="button" disabled>Stop reading</button>
+        </div>
+
+        <p id="speech-status" role="status" aria-live="polite"></p>
+        <audio id="patient-audio" controls preload="none" hidden></audio>
+      </section>
+    </main>
+
+    <script>
+      (() => {
+        const patientData = document.querySelector("#patient-data");
+        const approval = document.querySelector("#speech-approval");
+        const readButton = document.querySelector("#read-aloud");
+        const stopButton = document.querySelector("#stop-reading");
+        const status = document.querySelector("#speech-status");
+        const audioPlayer = document.querySelector("#patient-audio");
+        let audioUrl = null;
+
+        function setStatus(message) {
+          status.textContent = message;
+        }
+
+        function getSpeechErrorMessage(result) {
+          const providerMessages = {
+            400: "ElevenLabs could not process this request. Check the selected voice and speech model.",
+            401: "ElevenLabs rejected the API key. Check ELEVENLABS_API_KEY in the server's environment, then restart the server.",
+            402: "The ElevenLabs account needs an active plan or additional credits for text-to-speech.",
+            403: "The ElevenLabs API key does not have permission to use text-to-speech.",
+            404: "The configured ElevenLabs voice was not found. Check ELEVENLABS_VOICE_ID.",
+            422: "ElevenLabs could not use this text, voice, or model combination. Check the voice ID and model settings.",
+            429: "The ElevenLabs account has reached a rate or usage limit. Check your plan and try again later.",
+          };
+
+          if (providerMessages[result.providerStatus]) {
+            return `${providerMessages[result.providerStatus]} (Provider status: ${result.providerStatus})`;
+          }
+
+          return result.error || "Speech generation failed. Please try again.";
+        }
+
+        function clearAudioUrl() {
+          if (audioUrl) {
+            URL.revokeObjectURL(audioUrl);
+            audioUrl = null;
+          }
+          audioPlayer.removeAttribute("src");
+          audioPlayer.hidden = true;
+          audioPlayer.load();
+        }
+
+        function stopReading() {
+          audioPlayer.pause();
+          audioPlayer.currentTime = 0;
+          stopButton.disabled = true;
+          readButton.disabled = false;
+        }
+
+        readButton.addEventListener("click", async () => {
+          const text = patientData.value.trim();
+          if (!text) {
+            setStatus("There is no patient information to read aloud.");
+            patientData.focus();
+            return;
+          }
+          if (!approval.checked) {
+            setStatus("Confirm that your organization approves sending this text to ElevenLabs.");
+            approval.focus();
+            return;
+          }
+
+          clearAudioUrl();
+          readButton.disabled = true;
+          stopButton.disabled = true;
+          setStatus("Generating audio. Please wait.");
+
+          try {
+            const response = await fetch("/api/speak", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text }),
+            });
+
+            if (!response.ok) {
+              let result;
+              try {
+                result = await response.json();
+              } catch {
+                throw new Error("The server returned an invalid response.");
+              }
+              throw new Error(getSpeechErrorMessage(result));
+            }
+
+            const audio = await response.blob();
+            if (!audio.size) {
+              throw new Error("The speech service returned empty audio.");
+            }
+            audioUrl = URL.createObjectURL(audio);
+            audioPlayer.src = audioUrl;
+            audioPlayer.hidden = false;
+            try {
+              await audioPlayer.play();
+              setStatus("Playing generated audio.");
+            } catch {
+              readButton.disabled = false;
+              setStatus("Audio is ready. Press Play on the audio player to listen.");
+            }
+          } catch (error) {
+            setStatus(
+              error instanceof TypeError
+                ? "Could not reach the speech server. Open this page from the running local server and try again."
+                : error.message,
+            );
+            readButton.disabled = false;
+          }
+        });
+
+        stopButton.addEventListener("click", () => {
+          stopReading();
+          setStatus("Playback stopped.");
+        });
+
+        audioPlayer.addEventListener("play", () => {
+          readButton.disabled = true;
+          stopButton.disabled = false;
+          setStatus("Playing generated audio.");
+        });
+
+        audioPlayer.addEventListener("pause", () => {
+          if (!audioPlayer.ended) {
+            stopButton.disabled = true;
+            readButton.disabled = false;
+          }
+        });
+
+        audioPlayer.addEventListener("ended", () => {
+          stopButton.disabled = true;
+          readButton.disabled = false;
+          setStatus("Playback finished.");
+        });
+
+        window.addEventListener("pagehide", clearAudioUrl);
+      })();
+    </script>
+  </body>
+</html>
