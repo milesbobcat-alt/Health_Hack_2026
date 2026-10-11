@@ -293,6 +293,54 @@
         font-size: 1rem;
       }
 
+      .page-translation-controls {
+        display: flex;
+        width: min(100% - 3rem, 76rem);
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem 0.75rem;
+        margin: 0 auto;
+        padding-bottom: 0.75rem;
+      }
+
+      .page-translation-controls label {
+        display: inline-flex;
+        min-height: 44px;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0;
+        padding: 0;
+        font-size: 1rem;
+      }
+
+      .page-translation-controls input[type="checkbox"] {
+        flex: 0 0 auto;
+      }
+
+      .page-translation-controls select {
+        min-height: 44px;
+        padding: 0.35rem 0.5rem;
+        font-size: 1rem;
+      }
+
+      .page-translation-controls button {
+        min-height: 44px;
+        padding: 0.4rem 0.75rem;
+        font-size: 1rem;
+      }
+
+      .page-translation-status {
+        flex-basis: 100%;
+        min-height: 1.5em;
+        margin: 0;
+        color: var(--muted-text);
+        font-size: 1rem;
+      }
+
+      .page-translation-status[data-state="error"] {
+        color: var(--error);
+      }
+
       .patient-layout {
         display: grid;
         width: min(100% - 3rem, 76rem);
@@ -459,6 +507,10 @@
           width: min(100% - 2rem, 76rem);
         }
 
+        .page-translation-controls {
+          width: min(100% - 2rem, 76rem);
+        }
+
         .patient-layout {
           grid-template-columns: minmax(0, 1fr);
           gap: 1rem;
@@ -555,63 +607,6 @@
         color: var(--error);
       }
 
-      .translation-controls {
-        display: grid;
-        max-width: 42rem;
-        gap: 0.5rem;
-        margin-block: 1rem;
-      }
-
-      .translation-controls h3,
-      .translation-result h3 {
-        margin: 0;
-      }
-
-      .translation-controls p,
-      .translation-result p {
-        margin: 0;
-      }
-
-      .translation-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-      }
-
-      .translation-approval {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.75rem;
-      }
-
-      .translation-approval input {
-        flex: 0 0 auto;
-        margin-top: 0.5rem;
-      }
-
-      .translation-result {
-        display: grid;
-        max-height: 24rem;
-        gap: 0.75rem;
-        overflow: auto;
-        margin-top: 1rem;
-        padding: 1rem;
-        border: 1px solid var(--border);
-        border-radius: 3px;
-        background: var(--surface);
-      }
-
-      .translation-result[hidden] {
-        display: none;
-      }
-
-      #translated-text {
-        margin: 0;
-        overflow-wrap: anywhere;
-        white-space: pre-wrap;
-        font: inherit;
-      }
-
       @media (prefers-reduced-motion: reduce) {
         *,
         *::before,
@@ -634,6 +629,18 @@
           <a href="#wounds-tab" data-category="wounds">Wounds</a>
         </nav>
         <p class="patient-label">Patient</p>
+      </div>
+      <div id="page-translation-controls" class="page-translation-controls" data-page-name="ptView.html">
+        <label for="page-language">Page language</label>
+        <select id="page-language" disabled>
+          <option value="">Loading supported languages…</option>
+        </select>
+        <label for="page-translation-approval">
+          <input id="page-translation-approval" type="checkbox">
+          I approve sending this page text to AWS Translate
+        </label>
+        <button id="translate-page" type="button" disabled>Translate page</button>
+        <p id="page-translation-status" class="page-translation-status" role="status" aria-live="polite">Loading languages…</p>
       </div>
     </header>
 
@@ -669,27 +676,6 @@
           <p id="load-status" class="patient-status" role="status" aria-live="polite">Loading your discharge information…</p>
           <a id="pdf-link" class="button avs-document-link" target="_blank" rel="noopener noreferrer" hidden>View or download discharge PDF</a>
 
-          <div class="translation-controls" aria-labelledby="translation-heading">
-            <h3 id="translation-heading">Translate discharge text</h3>
-            <p>Choose a language to translate the English text shown under Care suggestions. Attached PDFs are not translated here.</p>
-            <label for="target-language">Translate to</label>
-            <select id="target-language" disabled>
-              <option value="">Loading supported languages…</option>
-            </select>
-            <label class="translation-approval" for="translation-approval">
-              <input id="translation-approval" type="checkbox">
-              I confirm sending this patient text to AWS Translate is approved by my organization.
-            </label>
-            <div class="translation-actions">
-              <button id="translate-document" type="button" disabled>Translate</button>
-            </div>
-            <p id="translation-status" class="patient-status" role="status" aria-live="polite">Loading AWS Translate languages…</p>
-          </div>
-          <section id="translation-result" class="translation-result" aria-labelledby="translation-result-heading" hidden>
-            <h3 id="translation-result-heading">Translated discharge text</h3>
-            <p>Machine translation can be imperfect. Review it against the English source before relying on clinical instructions.</p>
-            <pre id="translated-text"></pre>
-          </section>
         </section>
       </div>
 
@@ -732,13 +718,6 @@
         const patientData = document.querySelector("#patient-data");
         const loadStatus = document.querySelector("#load-status");
         const pdfLink = document.querySelector("#pdf-link");
-        const targetLanguage = document.querySelector("#target-language");
-        const translationApproval = document.querySelector("#translation-approval");
-        const translateButton = document.querySelector("#translate-document");
-        const translationStatus = document.querySelector("#translation-status");
-        const translationResult = document.querySelector("#translation-result");
-        const translationResultHeading = document.querySelector("#translation-result-heading");
-        const translatedText = document.querySelector("#translated-text");
         const readButton = document.querySelector("#read-aloud");
         const stopButton = document.querySelector("#stop-reading");
         const status = document.querySelector("#speech-status");
@@ -751,8 +730,6 @@
         };
         let activeCategory = "medications";
         let audioUrl = null;
-        let translating = false;
-        let translationRequestId = 0;
 
         function setStatus(message, state = "idle") {
           status.textContent = message;
@@ -762,94 +739,6 @@
         function setLoadStatus(message, state = "idle") {
           loadStatus.textContent = message;
           loadStatus.dataset.state = state;
-        }
-
-        function setTranslationStatus(message, state = "idle") {
-          translationStatus.textContent = message;
-          translationStatus.dataset.state = state;
-        }
-
-        function updateTranslateButton() {
-          translateButton.disabled = translating
-            || !patientData.value.trim()
-            || !targetLanguage.value
-            || !translationApproval.checked;
-        }
-
-        function invalidateTranslation() {
-          const hadResult = !translationResult.hidden || translating;
-          translationRequestId += 1;
-          translationResult.hidden = true;
-          translatedText.textContent = "";
-          if (hadResult) {
-            setTranslationStatus("Source text or target language changed. Translate again when ready.");
-          }
-        }
-
-        async function loadTranslationLanguages() {
-          try {
-            const response = await fetch("/api/translate/languages");
-            const result = await response.json();
-            if (!response.ok) {
-              throw new Error(result.error || "Supported languages could not be loaded.");
-            }
-            if (!Array.isArray(result.languages) || result.languages.length === 0) {
-              throw new Error("AWS Translate returned no target languages.");
-            }
-
-            const options = [new Option("Choose a language", "")];
-            for (const language of result.languages) {
-              options.push(new Option(`${language.name} (${language.code})`, language.code));
-            }
-            targetLanguage.replaceChildren(...options);
-            targetLanguage.disabled = false;
-            setTranslationStatus("Choose a target language.");
-          } catch (error) {
-            targetLanguage.replaceChildren(new Option("Languages unavailable", ""));
-            targetLanguage.disabled = true;
-            setTranslationStatus(error.message || "Could not load AWS Translate languages.", "error");
-          }
-          updateTranslateButton();
-        }
-
-        async function translateDischargeText() {
-          const text = patientData.value.trim();
-          const targetLanguageCode = targetLanguage.value;
-          if (!text || !targetLanguageCode || !translationApproval.checked) {
-            updateTranslateButton();
-            return;
-          }
-
-          translating = true;
-          const requestId = ++translationRequestId;
-          translationResult.hidden = true;
-          updateTranslateButton();
-          setTranslationStatus("Translating with AWS Translate…");
-
-          try {
-            const response = await fetch("/api/translate/document", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ text, targetLanguageCode }),
-            });
-            const result = await response.json();
-            if (!response.ok) {
-              throw new Error(result.error || "AWS Translate could not translate the discharge text.");
-            }
-
-            if (requestId !== translationRequestId) return;
-            translatedText.textContent = result.translatedText;
-            translationResultHeading.textContent = `Translated to ${result.targetLanguageName}`;
-            translationResult.hidden = false;
-            setTranslationStatus("Translation complete. Review it against the original English text.", "success");
-          } catch (error) {
-            if (requestId === translationRequestId) {
-              setTranslationStatus(error.message || "Translation failed. Try again.", "error");
-            }
-          } finally {
-            translating = false;
-            updateTranslateButton();
-          }
         }
 
         function showChecklistCategory(category) {
@@ -952,7 +841,6 @@
             }
             setLoadStatus("Your discharge information is ready.");
             readButton.disabled = !patientData.value.trim();
-            updateTranslateButton();
           } catch (error) {
             setLoadStatus(error instanceof TypeError
               ? "Could not connect to the discharge server. Check your connection and refresh this page."
@@ -1023,17 +911,6 @@
 
         patientData.addEventListener("input", () => {
           readButton.disabled = !patientData.value.trim() || !audioPlayer.paused;
-          invalidateTranslation();
-          updateTranslateButton();
-        });
-
-        targetLanguage.addEventListener("change", () => {
-          invalidateTranslation();
-          updateTranslateButton();
-        });
-        translationApproval.addEventListener("change", updateTranslateButton);
-        translateButton.addEventListener("click", () => {
-          void translateDischargeText();
         });
 
         readButton.addEventListener("click", () => {
@@ -1073,9 +950,9 @@
           audioPlayer.pause();
           clearAudioUrl();
         });
-        void loadTranslationLanguages();
         void loadDischarge();
       })();
     </script>
+    <script src="/page-translation.js" defer></script>
   </body>
 </html>

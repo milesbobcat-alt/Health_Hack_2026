@@ -28,7 +28,7 @@ afterEach(async () => {
   })));
 });
 
-test("returns paginated AWS Translate target languages, excluding English source", async () => {
+test("returns all paginated AWS Translate languages", async () => {
   const commands = [];
   const { url } = await startServer({
     send: async (command) => {
@@ -50,11 +50,12 @@ test("returns paginated AWS Translate target languages, excluding English source
     },
   });
 
-  const response = await fetch(`${url}/api/translate/languages`);
+  const response = await fetch(`${url}/api/languages`);
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
     sourceLanguageCode: "en",
     languages: [
+      { code: "en", name: "English" },
       { code: "fr", name: "French" },
       { code: "es", name: "Spanish" },
     ],
@@ -64,20 +65,23 @@ test("returns paginated AWS Translate target languages, excluding English source
   assert.equal(commands[1].input.NextToken, "page-two");
 });
 
-test("patient page exposes language selection, approval, and translated text output", async () => {
+test("both pages expose full-page translation controls and load the shared script", async () => {
   const { url } = await startServer({ send: async () => ({ Languages: [] }) });
-  const response = await fetch(`${url}/ptView.html`);
-  const page = await response.text();
-
-  assert.equal(response.status, 200);
-  assert.match(page, /id="target-language"/);
-  assert.match(page, /id="translation-approval"/);
-  assert.match(page, /id="translate-document"/);
-  assert.match(page, /id="translated-text"/);
-  assert.match(page, /\/api\/translate\/document/);
+  for (const pageName of ["ptView.html", "nurseIntake.html"]) {
+    const response = await fetch(`${url}/${pageName}`);
+    const page = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(page, /id="page-language"/);
+    assert.match(page, /id="page-translation-approval"/);
+    assert.match(page, /id="translate-page"/);
+    assert.match(page, /src="\/page-translation.js"/);
+  }
+  const scriptResponse = await fetch(`${url}/page-translation.js`);
+  assert.equal(scriptResponse.status, 200);
+  assert.match(scriptResponse.headers.get("content-type"), /javascript/);
 });
 
-test("translates English text with TranslateDocument and returns decoded text", async () => {
+test("translates a rendered patient page as HTML and returns the translated document", async () => {
   let translateCommand;
   const { url } = await startServer({
     send: async (command) => {
@@ -87,39 +91,39 @@ test("translates English text with TranslateDocument and returns decoded text", 
       translateCommand = command;
       return {
         TranslatedDocument: {
-          Content: new TextEncoder().encode("Tome el medicamento con comida."),
+          Content: new TextEncoder().encode("<html lang=\"es\"><body><h1>Instrucciones</h1></body></html>"),
         },
       };
     },
   });
 
-  const response = await fetch(`${url}/api/translate/document`, {
+  const response = await fetch(`${url}/api/translate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      text: "Take the medicine with food.",
+      pageName: "ptView.html",
+      html: "<html lang=\"en\"><body><h1 id=\"page-translation-0\">Discharge instructions</h1></body></html>",
       targetLanguageCode: "es",
     }),
   });
 
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
-    sourceLanguageCode: "en",
     targetLanguageCode: "es",
     targetLanguageName: "Spanish",
-    translatedText: "Tome el medicamento con comida.",
+    translatedHtml: "<html lang=\"es\"><body><h1>Instrucciones</h1></body></html>",
   });
   assert.ok(translateCommand instanceof TranslateDocumentCommand);
   assert.equal(translateCommand.input.SourceLanguageCode, "en");
   assert.equal(translateCommand.input.TargetLanguageCode, "es");
-  assert.equal(translateCommand.input.Document.ContentType, "text/plain");
+  assert.equal(translateCommand.input.Document.ContentType, "text/html");
   assert.equal(
     Buffer.from(translateCommand.input.Document.Content).toString("utf8"),
-    "Take the medicine with food.",
+    "<html lang=\"en\"><body><h1 id=\"page-translation-0\">Discharge instructions</h1></body></html>",
   );
 });
 
-test("rejects empty text and unsupported target languages", async () => {
+test("rejects unsupported pages and target languages", async () => {
   let translationCalled = false;
   const { url } = await startServer({
     send: async (command) => {
@@ -131,23 +135,31 @@ test("rejects empty text and unsupported target languages", async () => {
     },
   });
 
-  const emptyResponse = await fetch(`${url}/api/translate/document`, {
+  const unsupportedPage = await fetch(`${url}/api/translate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: "  ", targetLanguageCode: "es" }),
+    body: JSON.stringify({
+      pageName: "../server.mjs",
+      html: "<html><body>Test</body></html>",
+      targetLanguageCode: "es",
+    }),
   });
-  assert.equal(emptyResponse.status, 400);
+  assert.equal(unsupportedPage.status, 400);
 
-  const unsupportedResponse = await fetch(`${url}/api/translate/document`, {
+  const unsupportedLanguage = await fetch(`${url}/api/translate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: "Hello.", targetLanguageCode: "xx" }),
+    body: JSON.stringify({
+      pageName: "nurseIntake.html",
+      html: "<html><body>Hello.</body></html>",
+      targetLanguageCode: "xx",
+    }),
   });
-  assert.equal(unsupportedResponse.status, 400);
+  assert.equal(unsupportedLanguage.status, 400);
   assert.equal(translationCalled, false);
 });
 
-test("rejects text over the TranslateDocument 100,000-byte limit", async () => {
+test("rejects page HTML over the TranslateDocument 100,000-byte limit", async () => {
   let awsCalled = false;
   const { url } = await startServer({
     send: async () => {
@@ -156,10 +168,14 @@ test("rejects text over the TranslateDocument 100,000-byte limit", async () => {
     },
   });
 
-  const response = await fetch(`${url}/api/translate/document`, {
+  const response = await fetch(`${url}/api/translate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: "x".repeat(100_001), targetLanguageCode: "es" }),
+    body: JSON.stringify({
+      pageName: "ptView.html",
+      html: `<html><body>${"x".repeat(100_001)}</body></html>`,
+      targetLanguageCode: "es",
+    }),
   });
 
   assert.equal(response.status, 413);

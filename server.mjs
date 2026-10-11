@@ -14,6 +14,7 @@ const defaultMaxAudioBytes = 25 * 1024 * 1024;
 const maxSpeechTextCharacters = 5000;
 const maxTranslationDocumentBytes = 100_000;
 const maxTranslationRequestBytes = 600_000;
+const translatablePages = new Set(["nurseIntake.html", "ptView.html"]);
 const transcriptionUrl = "https://api.elevenlabs.io/v1/speech-to-text";
 const speechUrl = "https://api.elevenlabs.io/v1/text-to-speech";
 const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
@@ -127,10 +128,49 @@ export function createAppServer({
     }
   }
 
+  async function translateHtmlPage(pageName, targetLanguageCode, html) {
+    if (!translatablePages.has(pageName)) {
+      return { error: "Choose a supported page to translate.", statusCode: 400 };
+    }
+    if (Buffer.byteLength(html, "utf8") > maxTranslationDocumentBytes) {
+      return {
+        error: "The page text exceeds AWS TranslateDocument's 100,000-byte limit.",
+        statusCode: 413,
+      };
+    }
+
+    const languages = await getSupportedLanguages();
+    const targetLanguage = languages.find(
+      ({ LanguageCode }) => LanguageCode === targetLanguageCode,
+    );
+    if (!targetLanguage || targetLanguageCode === "en") {
+      return { error: "Choose a supported target language other than English.", statusCode: 400 };
+    }
+
+    const result = await translateClient.send(new TranslateDocumentCommand({
+      Document: {
+        Content: Buffer.from(html, "utf8"),
+        ContentType: "text/html",
+      },
+      SourceLanguageCode: "en",
+      TargetLanguageCode: targetLanguageCode,
+    }));
+    const translatedContent = result.TranslatedDocument?.Content;
+    if (!translatedContent || translatedContent.length === 0) {
+      return { error: "AWS Translate returned an empty page translation.", statusCode: 502 };
+    }
+
+    return {
+      targetLanguageCode,
+      targetLanguageName: targetLanguage.LanguageName,
+      translatedHtml: Buffer.from(translatedContent).toString("utf8"),
+    };
+  }
+
   return createHttpServer(async (request, response) => {
     const url = new URL(request.url, "http://localhost");
 
-    if (url.pathname === "/api/translate/languages") {
+    if (url.pathname === "/api/languages" || url.pathname === "/api/translate/languages") {
       if (request.method !== "GET") {
         response.setHeader("Allow", "GET");
         sendJson(response, 405, { error: "Use GET to load supported translation languages." });
@@ -142,7 +182,6 @@ export function createAppServer({
         sendJson(response, 200, {
           sourceLanguageCode: "en",
           languages: languages
-            .filter(({ LanguageCode }) => LanguageCode !== "en")
             .sort((left, right) => left.LanguageName.localeCompare(right.LanguageName))
             .map(({ LanguageCode, LanguageName }) => ({
               code: LanguageCode,
@@ -152,6 +191,54 @@ export function createAppServer({
       } catch {
         sendJson(response, 502, {
           error: "Could not load languages from AWS Translate. Check AWS credentials, region, and translate:ListLanguages permission.",
+        });
+      }
+      return;
+    }
+
+    if (url.pathname === "/api/translate") {
+      if (request.method !== "POST") {
+        response.setHeader("Allow", "POST");
+        sendJson(response, 405, { error: "Use POST to translate a page." });
+        return;
+      }
+
+      const contentType = request.headers["content-type"] || "";
+      if (!contentType.toLowerCase().startsWith("application/json")) {
+        sendJson(response, 415, { error: "Send the page name, HTML, and target language as application/json." });
+        return;
+      }
+
+      const bodyResult = await readJson(request, maxTranslationRequestBytes);
+      if (bodyResult.error) {
+        sendJson(response, bodyResult.statusCode, { error: bodyResult.error });
+        return;
+      }
+
+      const { pageName, targetLanguageCode, html } = bodyResult.value || {};
+      if (!translatablePages.has(pageName)) {
+        sendJson(response, 400, { error: "Choose a supported page to translate." });
+        return;
+      }
+      if (typeof html !== "string" || !html.trim()) {
+        sendJson(response, 400, { error: "Provide the rendered page HTML to translate." });
+        return;
+      }
+      if (!Buffer.byteLength(html, "utf8")) {
+        sendJson(response, 400, { error: "The rendered page is empty." });
+        return;
+      }
+
+      try {
+        const result = await translateHtmlPage(pageName, targetLanguageCode, html);
+        if (result.error) {
+          sendJson(response, result.statusCode, { error: result.error });
+          return;
+        }
+        sendJson(response, 200, result);
+      } catch {
+        sendJson(response, 502, {
+          error: "AWS Translate could not translate this page. Check AWS credentials, region, permissions, and the language pair.",
         });
       }
       return;
@@ -255,6 +342,23 @@ export function createAppServer({
         response.end();
         return;
       }
+    }
+
+    if (request.method === "GET" && url.pathname === "/page-translation.js") {
+      try {
+        const scriptPath = resolve(projectDirectory, "page-translation.js");
+        const scriptInfo = await stat(scriptPath);
+        response.writeHead(200, {
+          "Cache-Control": "no-store",
+          "Content-Length": scriptInfo.size,
+          "Content-Type": "text/javascript; charset=utf-8",
+          "X-Content-Type-Options": "nosniff",
+        });
+        createReadStream(scriptPath).pipe(response);
+      } catch {
+        sendJson(response, 500, { error: "The page translation script could not be loaded." });
+      }
+      return;
     }
 
     const pageFiles = {
