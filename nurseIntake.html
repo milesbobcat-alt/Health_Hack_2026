@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Add Care Instructions</title>
+    <title>Add CarePack Instructions</title>
     <style>
       :root {
         color-scheme: light;
@@ -181,8 +181,8 @@
       .submission-card {
         display: grid;
         gap: 1rem;
-        margin-top: 1.5rem;
-        padding: 1.5rem;
+        margin-top: 1rem;
+        padding: 1rem;
         border: 1px solid var(--border);
         border-radius: 3px;
         background-color: var(--surface);
@@ -191,8 +191,8 @@
       .checklist-review {
         display: grid;
         gap: 1rem;
-        margin-top: 1.5rem;
-        padding: 1.5rem;
+        margin-top: 1rem;
+        padding: 1rem;
         border: 1px solid var(--border);
         border-radius: 3px;
         background-color: var(--surface);
@@ -520,31 +520,61 @@
         #medication-list dl { grid-template-columns: 1fr; gap: .15rem; }
         #medication-list dd { margin-bottom: .3rem; }
       }
+      .checklist-item > div { flex: 1; min-width: 0; }
+      .medicine-editor > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+      .medicine-editor label { display: block; font-size: 0.9rem; }
+      .medicine-editor input { box-sizing: border-box; width: 100%; margin-top: 4px; }
+      .medicine-editor .field-instructions { grid-column: 1 / -1; }
+      .medicine-editor p { grid-column: 1 / -1; color: #a00; }
+          .checklist-review .checklist-items { max-height: 26rem; overflow-y: auto; padding-right: 4px; }
+          #generation-status { margin-top: .5rem; }
+      #generation-status[hidden], #submission-status:empty { display: none; }
+      .submission-card h2 { margin: 0; }
+      #patient-link-result { min-width: 0; }
+      #patient-link-result label { display: block; margin-bottom: .35rem; color: var(--muted-text); font-size: .9rem; }
+      #patient-link { box-sizing: border-box; width: 100%; padding: .65rem .75rem; border: 1px solid var(--border); border-radius: 3px; background: var(--surface); color: var(--text); }
+      #patient-link-result .recording-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-top: .75rem; }
+      #open-patient-link { font-weight: 600; text-underline-offset: .2em; }
+
+      .medication-comparison[hidden] { display: none; }
+      .medication-comparison { box-sizing: border-box; min-width: 0; width: 100%; margin-top: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: 3px; background: var(--surface); }
+      .medication-comparison h2 { margin: 0 0 .5rem; }
+      .comparison-scroll { overflow-x: auto; }
+      .comparison-table { width: 100%; min-width: 520px; border-collapse: collapse; table-layout: fixed; font-size: .875rem; line-height: 1.3; }
+      .comparison-table th, .comparison-table td { width: 50%; text-align: left; vertical-align: top; padding: .4rem .5rem; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+      .comparison-table th + th, .comparison-table td + td { border-left: 2px solid var(--border); }
+      .comparison-table p { margin: 0 0 .2rem; }
+      .comparison-table p:last-child { margin-bottom: 0; }
+      .comparison-table small { display: block; color: var(--muted-text); font-size: .75rem; line-height: 1.25; }
+      .comparison-warning { color: var(--error, #a00); font-weight: 600; }
+      .comparison-editor { display: grid; min-width: 0; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .6rem; margin-block: .6rem; border: 1px solid var(--border); border-radius: 3px; }
+      .comparison-editor label { display: grid; gap: .3rem; }
+      .comparison-editor input { min-width: 0; width: 100%; box-sizing: border-box; padding: .5rem; border: 1px solid var(--border); border-radius: 3px; }
+          .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     </style>
   </head>
   <body>
     <header class="page-header">
       <div class="header-content">
-        <p class="workspace-label">Care instructions</p>
-        <p class="role-label">RN workspace</p>
+        <p class="workspace-label">CarePack Instructions</p>
+        <p class="role-label">Medical Workspace</p>
       </div>
     </header>
 
     <main>
       <section class="intro" aria-labelledby="page-title">
-        <h1 id="page-title">Add care instructions</h1>
-        <p>Record spoken instructions or paste text from the electronic medical record.</p>
+        <h1 id="page-title">Add CarePack Instructions</h1>
+
       </section>
 
       <section class="source-card patient-card" aria-labelledby="patient-heading">
         <h2 id="patient-heading">Find Patient</h2>
         <form id="patient-search-form" class="patient-search-form">
           <div class="patient-search-field">
-            <input id="patient-name" aria-label="Patient name" name="name" type="search" required maxlength="100" autocomplete="off" placeholder="First name, last name, or first and last name" aria-describedby="patient-name-help">
+            <input id="patient-name" aria-label="Patient name" name="name" type="search" required maxlength="100" autocomplete="off" placeholder="First name, last name, or first and last name">
           </div>
           <button type="submit">Search</button>
         </form>
-        <p id="patient-name-help" class="card-description">First name, last name, or first + last. For compound surnames, try the first word.</p>
         <p id="patient-status" role="status" aria-live="polite"></p>
         <div id="selected-patient" hidden>
           <h3>Selected patient</h3>
@@ -569,7 +599,7 @@
 
       <div class="source-options">
         <section id="care-instructions-card" class="source-card" aria-labelledby="care-heading">
-          <h2 id="care-heading">Care Instructions</h2>
+          <h2 id="care-heading">CarePack Instructions</h2>
           <p class="card-description">Type instructions from the EMR or record them using your microphone.</p>
           <div class="recording-placeholder">
             <p id="recording-help">Record care instructions and review the transcript below.</p>
@@ -604,14 +634,16 @@
       </div>
 
       <button id="generate-checklist" type="button">Generate AI Care Plan</button>
-      <p id="generation-status" class="submission-status" role="status" aria-live="polite"></p>
+      <p hidden id="generation-status" class="submission-status" role="status" aria-live="polite"></p>
 
       <section id="checklist-review" class="checklist-review" aria-labelledby="review-heading" hidden>
         <h2 id="review-heading">Review AI care plan</h2>
-        <p class="card-description">Check every item against the source instructions. Edit, remove, or add items before sharing.</p>
+
         <div id="checklist-categories" class="checklist-categories"></div>
         <button id="submit-discharge" type="button">Confirm &amp; Create Patient Link</button>
       </section>
+
+      <section id="medication-comparison" class="medication-comparison" hidden aria-label="Before and after medications"></section>
 
       <section class="submission-card" aria-labelledby="submit-heading">
         <h2 id="submit-heading">Patient link</h2>
@@ -621,7 +653,7 @@
           <input id="patient-link" type="text" readonly>
           <div class="recording-actions">
             <button id="copy-patient-link" type="button">Copy Link</button>
-            <a id="open-patient-link" target="_blank" rel="noopener noreferrer">Open patient view in a new tab</a>
+            <a id="open-patient-link" target="_blank" rel="noopener noreferrer">Open patient view</a>
           </div>
         </div>
       </section>
@@ -632,6 +664,9 @@
       </div>
     </main>
     <script type="module">
+      import { renderComparison } from "./comparison-ui.mjs";
+      import { validateComparison, separateDose, reclassifyChangedRegimens } from "./medication-comparison.mjs";
+      import { medicationFields, isMedication, editMedication, woundFields, isWoundCare, editWoundCare } from "./medication-plan.mjs";
       import { initializePatientViewer } from "/patient-viewer.mjs";
       (() => {
         const maxRecordingBytes = 25 * 1024 * 1024;
@@ -663,15 +698,62 @@
           { key: "woundCare", label: "Wound Care" },
           { key: "followUps", label: "Follow Ups" },
           { key: "additional", label: "Additional" },
+          { key: "contactPhysician", label: "Contact Physician Immediately" },
         ];
         let checklist = null;
+        let medicationComparison = null;
+        const comparisonBox = document.querySelector('#medication-comparison');
+        function refreshComparison() {
+          const wasOpen = comparisonBox.querySelector('details')?.open;
+          const active = comparisonBox.contains?.(document.activeElement) && document.activeElement?.id
+            ? {id:document.activeElement.id,start:document.activeElement.selectionStart,end:document.activeElement.selectionEnd} : null;
+          if (medicationComparison) reclassifyChangedRegimens(medicationComparison);
+          renderComparison(comparisonBox, medicationComparison, {editable:true, onChange: value => {
+            medicationComparison = value;
+            if (checklist) {
+              checklist.medicationTransitions = value.groups;
+              checklist.medicine.forEach((item,index) => {
+                if (!item.name) return;
+                const matches = ['begin','continue','stop'].flatMap(group => value.groups[group].filter(med => med.name.trim().toLowerCase() === item.name.trim().toLowerCase()).map(med => ({group,med})));
+                if (matches.length !== 1) return;
+                const {group,med} = matches[0];
+                checklist.medicine[index] = group === 'stop'
+                  ? {name:med.name,strength:null,dose:null,frequency:null,instructions:med.instructions || `Stop taking ${med.name}.`}
+                  : editMedication(med);
+              });
+              renderChecklist();
+            }
+            patientLinkResult.hidden = true;
+            refreshComparison();
+          }});
+          if (wasOpen && comparisonBox.querySelector("details")) comparisonBox.querySelector("details").open = true;
+          if (active) {
+            const control = comparisonBox.querySelector(`#${active.id}`);
+            control?.focus();control?.setSelectionRange(active.start,active.end);
+          }
+        }
         let careVersion = 0;
-        initializePatientViewer({
+        let generationController = null;
+        function syncComparisonMedicine(previousName, item, {remove=false}={}) {
+          if (!medicationComparison || !previousName) return;
+          const key = previousName.trim().toLowerCase();
+          const matches = ['begin','continue','stop'].flatMap(group => medicationComparison.groups[group].filter(med => med.name.trim().toLowerCase() === key).map(med => ({group,med})));
+          if (matches.length === 1) {
+            const {group,med} = matches[0];
+            if (remove) medicationComparison.groups[group] = medicationComparison.groups[group].filter(value => value !== med);
+            else Object.assign(med, item, {sources:[...new Set([...med.sources,'Nurse review'])]});
+          } else if (matches.length > 1) {
+            const warning = 'Review the medication groups: a checklist edit matched multiple comparison records.';
+            if (!medicationComparison.warnings.includes(warning)) medicationComparison.warnings.push(warning);
+          }
+          refreshComparison();
+        }
+        const patientContext = initializePatientViewer({
           hasDraft: () => Boolean(transcriptField.value || pdfInput.files.length || checklist || !patientLinkResult.hidden),
           isBusy: () => startButton.disabled && patientLinkResult.hidden,
           clearDraft: () => {
-            careVersion++;
-            transcriptField.value = ''; pdfInput.value = ''; checklist = null;
+            careVersion++; generationController?.abort(); generationController = null;
+            transcriptField.value = ''; pdfInput.value = ''; checklist = null; medicationComparison = null; refreshComparison();
             checklistCategoriesContainer.replaceChildren(); checklistReview.hidden = true;
             patientLinkResult.hidden = true; patientLinkField.value = ''; openLink.removeAttribute('href');
             removePdfButton.hidden = true; submissionStatus.textContent = ''; submissionStatus.dataset.state = 'idle';
@@ -684,16 +766,20 @@
         });
 
         function setGenerationStatus(message, state = "idle") {
+          generationStatus.hidden = !message;
           generationStatus.textContent = message;
           generationStatus.dataset.state = state;
         }
 
         function invalidateChecklist() {
-          if (!checklist) return;
-          checklist = null;
-          checklistReview.hidden = true;
-          patientLinkResult.hidden = true;
-          setGenerationStatus("The source text changed. Generate a new care plan to review the updated instructions.");
+          const hadPlan = Boolean(checklist || medicationComparison);
+          careVersion++; generationController?.abort(); generationController = null;
+          checklist = null; medicationComparison = null; refreshComparison();
+          checklistReview.hidden = true; patientLinkResult.hidden = true;
+          generateButton.disabled = false; generateButton.removeAttribute('aria-busy');
+          transcriptField.disabled = false; pdfInput.disabled = false; removePdfButton.disabled = false;
+          submitButton.disabled = true;
+          if (hadPlan) setGenerationStatus("The source text changed. Generate a new care plan to review the updated instructions.");
         }
 
         function renderCategory({ key, label }) {
@@ -705,6 +791,7 @@
           heading.textContent = label;
           const items = document.createElement("ul");
           items.className = "checklist-items";
+          items.tabIndex = 0;
           items.setAttribute("aria-label", `${label} instructions`);
 
           if (checklist[key].length === 0) {
@@ -717,29 +804,54 @@
           checklist[key].forEach((text, index) => {
             const item = document.createElement("li");
             item.className = "checklist-item";
-            const input = document.createElement("input");
-            input.type = "text";
-            input.value = text;
-            input.setAttribute("aria-label", `${label} instruction ${index + 1}`);
-            input.addEventListener("input", () => {
-              checklist[key][index] = input.value;
-            });
-            input.addEventListener("change", () => {
-              checklist[key][index] = input.value.trim();
-              input.value = checklist[key][index];
-            });
+            const controls = document.createElement("div");
+            if (key === "medicine" || key === "woundCare") {
+              item.classList.add("medicine-editor");
+              checklist[key][index] = key === "medicine" ? editMedication(text) : editWoundCare(text);
+              if (/REVIEW REQUIRED/i.test(checklist[key][index].instructions || "")) {
+                const warning = document.createElement("p");
+                warning.textContent = "Conflicting source instructions — review before saving.";
+                warning.setAttribute("role", "alert"); controls.append(warning);
+              }
+              (key === "medicine" ? medicationFields : woundFields).forEach(field => {
+                const label = document.createElement("label");
+                label.className = `field-${field}`;
+                label.textContent = field[0].toUpperCase() + field.slice(1) + (key === "medicine" && field === "instructions" ? " (optional)" : "");
+                const input = document.createElement("input"); input.type = "text";
+                input.value = checklist[key][index][field] || ""; input.placeholder = "Not documented";
+                input.addEventListener("input", () => {
+                  const previousName = checklist[key][index].name;
+                  checklist[key][index][field] = input.value.trim() || (key === "woundCare" && field === "instructions" ? "" : null);
+                  if (key === "medicine") syncComparisonMedicine(previousName, checklist[key][index]);
+                });
+                input.addEventListener("change", () => {
+                  if (key !== 'medicine') return;
+                  const previousName = checklist[key][index].name;
+                  checklist[key][index] = separateDose(checklist[key][index]);
+                  syncComparisonMedicine(previousName, checklist[key][index]);
+                  renderChecklist();
+                });
+                label.append(input); controls.append(label);
+              });
+            } else {
+              const input = document.createElement("input"); input.type = "text"; input.value = text;
+              input.setAttribute("aria-label", `${label} instruction ${index + 1}`);
+              input.addEventListener("input", () => { checklist[key][index] = input.value; });
+              controls.append(input);
+            }
             const remove = document.createElement("button");
             remove.type = "button";
             remove.textContent = "Remove";
             remove.setAttribute("aria-label", `Remove ${label} instruction ${index + 1}`);
             remove.addEventListener("click", () => {
+              if (key === "medicine") syncComparisonMedicine(checklist[key][index].name, null, {remove:true});
               checklist[key].splice(index, 1);
               renderChecklist();
               checklistCategoriesContainer
                 .querySelector(`[aria-label="New ${label.toLowerCase()} instruction"]`)
                 ?.focus();
             });
-            item.append(input, remove);
+            item.append(controls, remove);
             items.append(item);
           });
 
@@ -760,7 +872,7 @@
               addInput.focus();
               return;
             }
-            checklist[key].push(value);
+            checklist[key].push(key === "medicine" ? {name: value, strength: null, dose: null, frequency: null, instructions: null} : key === "woundCare" ? {instructions: value, frequency: null} : value);
             renderChecklist();
             checklistCategoriesContainer
               .querySelector(`[aria-label="New ${label.toLowerCase()} instruction"]`)
@@ -812,12 +924,13 @@
         });
 
         generateButton.addEventListener("click", async () => {
-          const version = careVersion;
+          const version = ++careVersion;
+          generationController?.abort(); generationController = new AbortController();
           const transcript = transcriptField.value.trim();
           const [pdfFile] = pdfInput.files;
 
-          if (!transcript) {
-            setGenerationStatus("Add or record the discharge transcript before generating a care plan.", "error");
+          if (!transcript && !pdfInput.files.length) {
+            setGenerationStatus("Add a transcript or attach a text-based PDF before generating a care plan.", "error");
             transcriptField.focus();
             return;
           }
@@ -828,8 +941,10 @@
           }
           const formData = new FormData();
           formData.append("transcript", transcript);
+          if (patientContext.selected) formData.append("patientContext", JSON.stringify({id:patientContext.selected.patient.id, server:patientContext.selected.server}));
           if (pdfFile) formData.append("pdfFile", pdfFile);
           checklist = null;
+          medicationComparison = null; refreshComparison();
           checklistReview.hidden = true;
           patientLinkResult.hidden = true;
           submissionStatus.textContent = "";
@@ -845,6 +960,7 @@
           let responseStatus = null;
           try {
             const response = await fetch("/api/generate-checklist", {
+              signal: generationController.signal,
               method: "POST",
               body: formData,
             });
@@ -883,17 +999,22 @@
               );
             }
             if (version !== careVersion) return;
+            if (result.checklist && !("contactPhysician" in result.checklist)) result.checklist.contactPhysician = [];
             const validChecklist = result.checklist
               && categories.every(({ key }) => Array.isArray(result.checklist[key])
-                && result.checklist[key].every((item) => typeof item === "string"));
+                && result.checklist[key].every((item) => typeof item === "string" || (key === "medicine" && isMedication(item)) || (key === "woundCare" && isWoundCare(item))));
             if (!validChecklist) throw new Error("The server returned an invalid checklist.");
             checklist = Object.fromEntries(categories.map(
-              ({ key }) => [key, result.checklist[key].map((item) => item.trim()).filter(Boolean)],
+              ({ key }) => [key, result.checklist[key].map((item) => key === "medicine" ? editMedication(item) : key === "woundCare" ? editWoundCare(item) : item.trim()).filter(Boolean)],
             ));
+            medicationComparison = result.medicationComparison
+              ? validateComparison(result.medicationComparison, patientContext.selected?.server || result.medicationComparison.patient?.server) : null;
+            if (medicationComparison) checklist.medicationTransitions = medicationComparison.groups;
+            refreshComparison();
             renderChecklist();
             checklistReview.hidden = false;
             submitButton.disabled = false;
-            setGenerationStatus("Care plan ready. Review and edit every item before sharing.", "success");
+            setGenerationStatus("");
             checklistReview.scrollIntoView({ behavior: "smooth", block: "start" });
           } catch (error) {
             if (version !== careVersion) return;
@@ -920,16 +1041,29 @@
           const version = careVersion;
           const transcript = transcriptField.value.trim();
           const [pdfFile] = pdfInput.files;
+          const invalidComparisonField = comparisonBox.querySelector('input:invalid');
+          if (invalidComparisonField) {invalidComparisonField.reportValidity();return;}
           if (!checklist) {
             setGenerationStatus("Generate and review a care plan before creating a patient link.", "error");
             return;
+          }
+          if (checklist.medicine.some(item => !isMedication(editMedication(item)))) {
+            setGenerationStatus("Fill in at least one field for each medication, or remove the empty medication.", "error");
+            return;
+          }
+          if (checklist.woundCare.some(item => !isWoundCare(editWoundCare(item)))) {
+            setGenerationStatus("Add wound-care instructions or remove the empty item.", "error"); return;
           }
           const formData = new FormData();
           formData.append("transcript", transcript);
           const finalChecklist = Object.fromEntries(categories.map(({ key }) => [
             key,
-            checklist[key].map((item) => item.trim()).filter(Boolean),
+            checklist[key].map((item) => key === "medicine" ? editMedication(item) : key === "woundCare" ? editWoundCare(item) : item.trim()).filter((item) => key === "medicine" ? isMedication(item) : key === "woundCare" ? isWoundCare(item) : Boolean(item)),
           ]));
+          if (medicationComparison) {
+            finalChecklist.medicationTransitions = medicationComparison.groups;
+            formData.append("medicationComparison", JSON.stringify(medicationComparison));
+          }
           formData.append("checklist", JSON.stringify(finalChecklist));
           if (pdfFile) formData.append("pdfFile", pdfFile);
           submitButton.disabled = true;
@@ -937,7 +1071,7 @@
           transcriptField.disabled = true;
           pdfInput.disabled = true;
           removePdfButton.disabled = true;
-          checklistReview.querySelectorAll("input, button").forEach((control) => {
+          document.querySelectorAll("#checklist-review input, #checklist-review button, #medication-comparison input, #medication-comparison button").forEach((control) => {
             control.disabled = true;
           });
           patientLinkResult.hidden = true;
@@ -978,7 +1112,7 @@
               startButton.disabled = false;
               pdfInput.disabled = false;
               removePdfButton.disabled = false;
-              checklistReview.querySelectorAll("input, button").forEach((control) => {
+              document.querySelectorAll("#checklist-review input, #checklist-review button, #medication-comparison input, #medication-comparison button").forEach((control) => {
                 control.disabled = false;
               });
             }

@@ -8,6 +8,7 @@ const sampleChecklist = {
   woundCare: [],
   followUps: [],
   additional: ["Drink plenty of fluids."],
+  contactPhysician: [],
 };
 
 function appendChecklist(form, checklist = sampleChecklist) {
@@ -57,7 +58,7 @@ test("exports an API Gateway-compatible Lambda handler", async () => {
 
   assert.equal(response.statusCode, 200);
   assert.match(response.headers["content-type"], /text\/html/);
-  assert.match(response.body, /Add care instructions/);
+  assert.match(response.body, /Add CarePack Instructions/);
 });
 
 test("transcribes audio through ElevenLabs without returning provider data", async () => {
@@ -148,7 +149,7 @@ test("serves the intake page from the root path", async () => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), /text\/html/);
   const page = await response.text();
-  assert.match(page, /Add care instructions/);
+  assert.match(page, /Add CarePack Instructions/);
   assert.match(page, /id="start-recording"/);
   assert.match(page, /\/api\/transcribe/);
   assert.match(page, /id="generate-checklist"/);
@@ -194,6 +195,7 @@ test("generates a flexible checklist from the transcript and extracted PDF text"
       "Call if the clinic is closed.",
       "Bring the list to your visit.",
     ],
+    contactPhysician: [],
   };
   const { url } = await startServer({
     bedrockModelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
@@ -224,7 +226,7 @@ test("generates a flexible checklist from the transcript and extracted PDF text"
 
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
-    checklist: generatedChecklist,
+    checklist: {...generatedChecklist, medicine: [{name: null, strength: null, dose: null, frequency: null, instructions: "Take the pill each morning."}]},
     extractedDocText: "Call the clinic next week.",
   });
   assert.equal(invokeCommand.model, "anthropic.claude-3-5-sonnet-20241022-v2:0");
@@ -238,10 +240,12 @@ test("generates a flexible checklist from the transcript and extracted PDF text"
     "woundCare",
     "followUps",
     "additional",
+    "contactPhysician",
+    "medicationTransitions",
   ]);
   assert.match(invokeCommand.system, /ONLY use facts and directives explicitly stated/);
   assert.match(invokeCommand.messages[0].content, /Take the pill each morning/);
-  assert.match(invokeCommand.messages[0].content, /Call the clinic next week/);
+  assert.doesNotMatch(invokeCommand.messages[0].content, /Call the clinic next week/);
 });
 
 test("accepts valid checklist JSON wrapped in Markdown and explanatory text", async () => {
@@ -267,9 +271,9 @@ test("accepts valid checklist JSON wrapped in Markdown and explanatory text", as
   assert.equal(response.status, 200);
   assert.deepEqual((await response.json()).checklist, {
     medicine: [],
-    woundCare: ["Keep the dressing clean."],
+    woundCare: [{instructions: "Keep the dressing clean.", frequency: null}],
     followUps: [],
-    additional: [],
+    additional: [], contactPhysician: [],
   });
 });
 
@@ -569,7 +573,7 @@ test("fetches a discharge record and signs its PDF download URL", async () => {
   assert.deepEqual(await response.json(), {
     dischargeId: "patient-123",
     transcript: "Rest and drink water.",
-    checklist: { medicine: [], woundCare: [], followUps: [], additional: [] },
+    checklist: { medicine: [], woundCare: [], followUps: [], additional: [], contactPhysician: [] },
     pdfUrl: "https://signed.example/download",
     pdfOriginalName: "aftercare.pdf",
   });
@@ -605,7 +609,7 @@ test("loads a transcript-only discharge without requiring S3", async () => {
   assert.deepEqual(await response.json(), {
     dischargeId: "transcript-only-id",
     transcript: "Drink plenty of fluids.",
-    checklist: { medicine: [], woundCare: [], followUps: [], additional: [] },
+    checklist: { medicine: [], woundCare: [], followUps: [], additional: [], contactPhysician: [] },
   });
 });
 
@@ -638,11 +642,11 @@ test("rejects discharge submissions with an empty transcript", async () => {
   const form = new FormData();
   form.append("transcript", " ");
   appendChecklist(form);
-  form.append("pdfFile", new Blob(["%PDF"], { type: "application/pdf" }), "missing.pdf");
+
 
   const response = await fetch(`${url}/api/discharge`, { method: "POST", body: form });
   assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), { error: "Provide a non-empty discharge transcript." });
+  assert.deepEqual(await response.json(), { error: "Provide a discharge transcript or a text-based PDF." });
 
 });
 
@@ -773,4 +777,150 @@ test("does not return provider error details to the caller", async () => {
     error: "The speech transcription service rejected the audio.",
     providerStatus: 401,
   });
+});
+
+const structuredMedicine = {name: "Aspirin", strength: "81 mg per tablet", dose: "1 tablet", frequency: "once daily", instructions: "As needed for pain"};
+const structuredPlan = {medicine: [structuredMedicine], woundCare: [], followUps: [], additional: [], contactPhysician: []};
+test("PDF-only generation sends extracted text and structured medication schema to Bedrock", async () => {
+  const {url} = await startServer({bedrockModelId: "mock", pdfParser: async () => ({text: "Aspirin 81 mg, one tablet daily as needed for pain."}),
+    bedrockClient: {messages: {create: async params => {
+      assert.match(params.messages[0].content, /Aspirin 81 mg/);
+      assert.equal(params.tools[0].input_schema.properties.medicine.items.type, "object");
+      assert.match(params.system, /REVIEW REQUIRED/);
+      assert.match(params.system, /Never derive strength from dose/);
+      return {content: [{type: "tool_use", name: "return_discharge_checklist", input: structuredPlan}]};
+    }}}});
+  const form = new FormData(); form.append("pdfFile", new Blob(["pdf"], {type: "application/pdf"}), "discharge.pdf");
+  const response = await fetch(`${url}/api/generate-checklist`, {method: "POST", body: form});
+  assert.equal(response.status, 200); assert.deepEqual((await response.json()).checklist, structuredPlan);
+});
+test("empty and unreadable PDFs never invoke Bedrock, even with a transcript", async () => {
+  for (const pdfParser of [async () => ({text: "  "}), async () => {throw new Error("invalid PDF");}]) {
+    const {url} = await startServer({bedrockModelId: "mock", pdfParser, bedrockClient: {messages: {create: async () => assert.fail("Must not call AI")}}});
+    const form = new FormData(); form.append("transcript", "Nurse notes"); form.append("pdfFile", new Blob(["bad"], {type: "application/pdf"}), "discharge.pdf");
+    const response = await fetch(`${url}/api/generate-checklist`, {method: "POST", body: form});
+    assert.equal(response.status, 400); assert.match((await response.json()).error, /no readable text|could not be read/);
+  }
+});
+test("structured medicine nulls and conflict wording survive save and retrieval", async () => {
+  const medicine = {...structuredMedicine, dose: null, frequency: null, instructions: "REVIEW REQUIRED: conflicting instructions: PDF says once daily; nurse says twice daily"};
+  const plan = {...structuredPlan, medicine: [medicine]}; let record;
+  const {url} = await startServer({tableName: "mock", dynamoClient: {send: async command => {
+    if (command.input.Item) {record = command.input.Item; return {};}
+    return {Item: record};
+  }}});
+  const form = new FormData(); form.append("transcript", "Nurse notes"); form.append("checklist", JSON.stringify(plan));
+  const saved = await fetch(`${url}/api/discharge`, {method: "POST", body: form}); assert.equal(saved.status, 201);
+  const {dischargeId} = await saved.json();
+  const response = await fetch(`${url}/api/discharge/${dischargeId}`); assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).checklist, plan);
+});
+test("invalid medication field types are rejected before persistence", async () => {
+  const {url} = await startServer({tableName: "mock", dynamoClient: {send: async () => assert.fail("Must not save")}});
+  const form = new FormData(); form.append("transcript", "Notes");
+  form.append("checklist", JSON.stringify({...structuredPlan, medicine: [{...structuredMedicine, dose: 2}]}));
+  assert.equal((await fetch(`${url}/api/discharge`, {method: "POST", body: form})).status, 400);
+});
+test("old saved medicine strings remain readable without inventing structured values", async () => {
+  const {url} = await startServer({tableName: "mock", dynamoClient: {send: async () => ({Item: {dischargeId: "legacy", expiresAt: Math.floor(Date.now()/1000)+3600, transcript: "Notes", checklist: sampleChecklist}})}});
+  const response = await fetch(`${url}/api/discharge/legacy`); assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).checklist, sampleChecklist);
+});
+
+test("structured wound care and warning urgency survive generation, saving, and retrieval", async () => {
+ const plan = {...structuredPlan, woundCare: [{instructions: "Change the dressing", frequency: "once daily"}, {instructions: "Keep wound dry", frequency: null}], contactPhysician: ["Call your physician immediately if your legs swell.", "Call 911 for severe trouble breathing."]};
+ let record;
+ const {url} = await startServer({tableName: "mock", bedrockModelId: "mock", bedrockClient: {messages: {create: async params => {
+   assert.match(params.system, /Never downgrade an emergency/); assert.match(params.system, /Never invent warning signs/);
+   assert.equal(params.tools[0].input_schema.properties.woundCare.items.type, "object");
+   assert.ok(params.tools[0].input_schema.required.includes("contactPhysician"));
+   return {content: [{type: "tool_use", name: "return_discharge_checklist", input: plan}]};
+ }}}, dynamoClient: {send: async command => {if (command.input.Item) {record=command.input.Item;return {};}return {Item: record};}}});
+ const source = new FormData();source.append("transcript", "Documented warnings and wound instructions");
+ const generated=await fetch(`${url}/api/generate-checklist`,{method:"POST",body:source});assert.equal(generated.status,200);assert.deepEqual((await generated.json()).checklist,plan);
+ const form = new FormData();form.append("transcript","Notes");form.append("checklist",JSON.stringify(plan));
+ const saved=await fetch(`${url}/api/discharge`,{method:"POST",body:form});assert.equal(saved.status,201);
+ const {dischargeId}=await saved.json();const loaded=await fetch(`${url}/api/discharge/${dischargeId}`);assert.deepEqual((await loaded.json()).checklist,plan);
+});
+test("legacy plans gain an empty warning category without reclassifying old instructions", async () => {
+ const legacy={medicine:[],woundCare:["Change bandage daily"],followUps:[],additional:["Call clinic for swelling"]};
+ const {url}=await startServer({tableName:"mock",dynamoClient:{send:async()=>({Item:{expiresAt:Math.floor(Date.now()/1000)+3600,checklist:legacy}})}});
+ const response=await fetch(`${url}/api/discharge/legacy-wound`);assert.equal(response.status,200);
+ assert.deepEqual((await response.json()).checklist,{...legacy,contactPhysician:[]});
+});
+test("invalid wound frequency and warning values cannot be saved", async () => {
+ const {url}=await startServer({tableName:"mock",dynamoClient:{send:async()=>assert.fail("Must not save")}});
+ for (const plan of [{...structuredPlan,woundCare:[{instructions:"Change dressing",frequency:3}]},{...structuredPlan,contactPhysician:[{instructions:"Warning"}]}]) {
+ const form=new FormData();form.append("transcript","Notes");form.append("checklist",JSON.stringify(plan));
+ assert.equal((await fetch(`${url}/api/discharge`,{method:"POST",body:form})).status,400);
+ }
+});
+
+test("combined transcript/PDF instructions reach Bedrock and survive response validation", async () => {
+ const {renderPatientCategory} = await import("./patient-render-test-helper.mjs");
+ const plan={medicine:[],woundCare:[{instructions:"Clean the incision",frequency:"daily"}],followUps:["Call the clinic Monday"],additional:[],contactPhysician:[]};
+ let calls=0;
+ const {url}=await startServer({bedrockModelId:"mock", pdfParser:async buffer=>{assert.equal(buffer.toString(),"synthetic PDF");return {text:"Clean the incision daily"};},
+ bedrockClient:{messages:{create:async params=>{
+ calls++;
+ const isPdf = params.messages[0].content.includes("Clean the incision daily");
+ assert.equal(params.messages[0].content.includes("Call the clinic Monday"), !isPdf);
+ assert.match(params.system,/A transcript is supplemental; it does not replace the PDF/);assert.match(params.system,/Neither source automatically overrides/);
+ return {content:[{type:"tool_use",name:"return_discharge_checklist",input:{...plan,woundCare:isPdf ? plan.woundCare : [],followUps:isPdf ? [] : plan.followUps}}]};
+ }}}});
+ const form=new FormData();form.append("transcript","Call the clinic Monday");form.append("pdfFile",new Blob(["synthetic PDF"],{type:"application/pdf"}),"instructions.pdf");
+ const response=await fetch(`${url}/api/generate-checklist`,{method:"POST",body:form});assert.equal(response.status,200);
+ const result=await response.json();assert.deepEqual(result.checklist,plan);assert.equal(calls,2);
+ assert.match(renderPatientCategory(result.checklist,"woundCare"),/Clean the incision.*Frequency: daily/);
+ assert.match(renderPatientCategory(result.checklist,"followUps"),/Call the clinic Monday/);
+});
+test("source parser exceptions are logged without source content", async () => {
+ const logs=[];const {url}=await startServer({logger:{info(){},error:(...args)=>logs.push(args)},bedrockModelId:"mock",pdfParser:async()=>{throw new Error("PRIVATE SOURCE CONTENT");},bedrockClient:{messages:{create:async()=>assert.fail("Must not call AI")}}});
+ const form=new FormData();form.append("transcript","PRIVATE TRANSCRIPT");form.append("pdfFile",new Blob(["bad"],{type:"application/pdf"}),"instructions.pdf");
+ assert.equal((await fetch(`${url}/api/generate-checklist`,{method:"POST",body:form})).status,400);
+ assert.doesNotMatch(JSON.stringify(logs),/PRIVATE SOURCE|PRIVATE TRANSCRIPT/);
+});
+
+test("numbered example headings do not reject an uploaded PDF", async () => {
+ let calls=0;
+ const {url}=await startServer({bedrockModelId:"mock",pdfParser:async()=>({text:"Example 1 — First case\nExample 2 — Next heading"}),bedrockClient:{messages:{create:async()=>{calls++;return {content:[{type:"tool_use",name:"return_discharge_checklist",input:structuredPlan}]};}}}});
+ const form=new FormData();form.append("pdfFile",new Blob(["pdf"],{type:"application/pdf"}),"cases.pdf");
+ const response=await fetch(`${url}/api/generate-checklist`,{method:"POST",body:form});assert.equal(response.status,200);assert.equal(calls,1);
+});
+test("an empty PDF model result cannot silently produce a transcript-only plan", async () => {
+ const {url}=await startServer({bedrockModelId:"mock",pdfParser:async()=>({text:"Clean incision daily"}),bedrockClient:{messages:{create:async()=>({content:[{type:"tool_use",name:"return_discharge_checklist",input:{medicine:[],woundCare:[],followUps:[],additional:[],contactPhysician:[]}}]})}}});
+ const form=new FormData();form.append("transcript","take aspirin as needed");form.append("pdfFile",new Blob(["pdf"],{type:"application/pdf"}),"case.pdf");
+ const response=await fetch(`${url}/api/generate-checklist`,{method:"POST",body:form});assert.equal(response.status,422);const result=await response.json();assert.equal("checklist" in result,false);assert.match(result.error,/PDF.*no partial plan/);
+});
+
+test("selected-patient FHIR baseline and AI transitions survive generation/save/retrieval", async () => {
+ const transitions={before:[],continue:[],begin:[{name:"Atorvastatin",formulation:null,strength:"40 mg",dose:"1 tablet",frequency:"daily",instructions:null}],stop:[]};
+ const plan={...structuredPlan,medicationTransitions:transitions};let stored;let fhirCalls=0;
+ const {url}=await startServer({fhirBaseUrl:"https://fhir.example/r4",tableName:"mock",bedrockModelId:"mock",
+ fhirFetchImpl:async request=>{fhirCalls++;const type=String(request).includes('MedicationStatement') ? 'MedicationStatement' : 'MedicationRequest';return Response.json({resourceType:"Bundle",type:"searchset",entry:type==='MedicationStatement' ? [{resource:{resourceType:type,id:"m1",subject:{reference:"Patient/omar"},medicationCodeableConcept:{text:"Atorvastatin"},dosage:[{text:"one tablet twice weekly",doseAndRate:[{doseQuantity:{value:1,unit:"tablet"}}]}]}}] : []});},
+ bedrockClient:{messages:{create:async params=>{assert.doesNotMatch(params.messages[0].content,/one tablet twice weekly/);assert.match(params.system,/Never copy the same milligram amount/);return {content:[{type:"tool_use",name:"return_discharge_checklist",input:plan}]};}}},
+ dynamoClient:{send:async command=>{if(command.input.Item){stored=command.input.Item;return {};}return {Item:stored};}}});
+ const form=new FormData();form.append("transcript","Begin atorvastatin 40 mg tablets, one daily");form.append("patientContext",JSON.stringify({id:"omar",server:"https://fhir.example/r4"}));
+ const response=await fetch(`${url}/api/generate-checklist`,{method:"POST",body:form});assert.equal(response.status,200);const result=await response.json();
+ assert.equal(fhirCalls,2);assert.equal(result.medicationComparison.patient.id,"omar");assert.equal(result.medicationComparison.baseline.length,1);assert.equal(result.medicationComparison.baseline[0].dose,"1 tablet");assert.deepEqual(result.medicationComparison.groups.begin[0].sources,["Transcript"]);
+ const save=new FormData();save.append("transcript","Notes");save.append("checklist",JSON.stringify(result.checklist));save.append("medicationComparison",JSON.stringify(result.medicationComparison));
+ const saved=await fetch(`${url}/api/discharge`,{method:"POST",body:save});assert.equal(saved.status,201);const {dischargeId}=await saved.json();
+ const loaded=await fetch(`${url}/api/discharge/${dischargeId}`);assert.equal(loaded.status,200);assert.deepEqual((await loaded.json()).medicationComparison,result.medicationComparison);
+});
+test("comparison rejects arbitrary FHIR identity before AI or upstream requests", async () => {
+ const {url}=await startServer({bedrockModelId:"mock",fhirFetchImpl:async()=>assert.fail("No upstream"),bedrockClient:{messages:{create:async()=>assert.fail("No AI")}}});
+ const form=new FormData();form.append("transcript","Notes");form.append("patientContext",JSON.stringify({id:"omar",server:"https://arbitrary.example"}));
+ assert.equal((await fetch(`${url}/api/generate-checklist`,{method:"POST",body:form})).status,400);
+});
+test("same mass amount cannot appear as both strength and unit-count dose in model result", async () => {
+ const plan={...structuredPlan,medicine:[{...structuredMedicine,strength:"40 mg",dose:"40 mg"}]};
+ const {url}=await startServer({bedrockModelId:"mock",bedrockClient:{messages:{create:async()=>({content:[{type:"tool_use",name:"return_discharge_checklist",input:plan}]})}}});
+ const form=new FormData();form.append("transcript","Example medication 40 mg");const response=await fetch(`${url}/api/generate-checklist`,{method:"POST",body:form});assert.equal(response.status,200);
+ const result=await response.json();assert.equal(result.checklist.medicine[0].dose,null);assert.match(result.checklist.medicine[0].instructions,/Documented total amount: 40 mg/);
+});
+test("FHIR failure remains visible as incomplete history, without inventing before medicines", async () => {
+ const transitions={before:[],continue:[],begin:[{name:"Aspirin",formulation:null,strength:null,dose:null,frequency:null,instructions:"As needed"}],stop:[]};
+ const {url}=await startServer({fhirBaseUrl:"https://fhir.example/r4",bedrockModelId:"mock",fhirFetchImpl:async()=>{throw new Error("unavailable");},bedrockClient:{messages:{create:async()=>({content:[{type:"tool_use",name:"return_discharge_checklist",input:{...structuredPlan,medicationTransitions:transitions}}]})}}});
+ const form=new FormData();form.append("transcript","Begin aspirin as needed");form.append("patientContext",JSON.stringify({id:"omar",server:"https://fhir.example/r4"}));const response=await fetch(`${url}/api/generate-checklist`,{method:"POST",body:form});assert.equal(response.status,200);
+ const result=await response.json();assert.deepEqual(result.medicationComparison.baseline,[]);assert.equal(result.medicationComparison.warnings.length,2);
 });

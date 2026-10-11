@@ -579,6 +579,26 @@
           transition-duration: 0.01ms !important;
         }
       }
+          .patient-medication { display: grid; gap: 5px; min-width: 0; }
+      .medication-facts { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+      .checklist-tabs { flex-wrap: wrap; }
+          .checklist-items { max-height: 28rem; overflow-y: auto; }
+
+      .medication-comparison[hidden] { display: none; }
+      .medication-comparison { box-sizing: border-box; min-width: 0; width: 100%; margin-top: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: 3px; background: var(--surface); }
+      .medication-comparison h2 { margin: 0 0 .5rem; }
+      .comparison-scroll { overflow-x: auto; }
+      .comparison-table { width: 100%; min-width: 520px; border-collapse: collapse; table-layout: fixed; font-size: .875rem; line-height: 1.3; }
+      .comparison-table th, .comparison-table td { width: 50%; text-align: left; vertical-align: top; padding: .4rem .5rem; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+      .comparison-table th + th, .comparison-table td + td { border-left: 2px solid var(--border); }
+      .comparison-table p { margin: 0 0 .2rem; }
+      .comparison-table p:last-child { margin-bottom: 0; }
+      .comparison-table small { display: block; color: var(--muted-text); font-size: .75rem; line-height: 1.25; }
+      .comparison-warning { color: var(--error, #a00); font-weight: 600; }
+      .comparison-editor { display: grid; min-width: 0; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .6rem; margin-block: .6rem; border: 1px solid var(--border); border-radius: 3px; }
+      .comparison-editor label { display: grid; gap: .3rem; }
+      .comparison-editor input { min-width: 0; width: 100%; box-sizing: border-box; padding: .5rem; border: 1px solid var(--border); border-radius: 3px; }
+          .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     </style>
   </head>
   <body>
@@ -591,6 +611,7 @@
           <a href="#woundCare-tab" data-category="woundCare">Wound Care</a>
           <a href="#followUps-tab" data-category="followUps">Follow Ups</a>
           <a href="#additional-tab" data-category="additional">Additional</a>
+          <a href="#contactPhysician-tab" data-category="contactPhysician">Contact Physician Immediately</a>
         </nav>
         <p class="patient-label">Patient</p>
       </div>
@@ -607,9 +628,11 @@
             <button id="woundCare-tab" type="button" role="tab" aria-selected="false" aria-controls="checklist-items" data-category="woundCare" tabindex="-1">Wound Care (0)</button>
             <button id="followUps-tab" type="button" role="tab" aria-selected="false" aria-controls="checklist-items" data-category="followUps" tabindex="-1">Follow Ups (0)</button>
             <button id="additional-tab" type="button" role="tab" aria-selected="false" aria-controls="checklist-items" data-category="additional" tabindex="-1">Additional (0)</button>
+            <button id="contactPhysician-tab" type="button" role="tab" aria-selected="false" aria-controls="checklist-items" data-category="contactPhysician" tabindex="-1">Contact Physician Immediately (0)</button>
           </div>
 
-          <ul id="checklist-items" class="checklist-items" aria-live="polite"></ul>
+          <ul tabindex="0" id="checklist-items" class="checklist-items" aria-live="polite"></ul>
+          <section id="medication-comparison" class="medication-comparison" hidden aria-label="Before and after medications"></section>
         </section>
 
         <section class="patient-section avs-section" aria-labelledby="avs-heading">
@@ -653,7 +676,9 @@
       </aside>
     </main>
 
-    <script>
+    <script type="module">
+      import { renderComparison, comparisonReadAloud } from "./comparison-ui.mjs";
+      import { isMedication, medicationText, isWoundCare, woundCareText } from "./medication-plan.mjs";
       (() => {
         const patientData = document.querySelector("#patient-data");
         const loadStatus = document.querySelector("#load-status");
@@ -669,6 +694,7 @@
           { key: "woundCare", label: "Wound Care" },
           { key: "followUps", label: "Follow Ups" },
           { key: "additional", label: "Additional" },
+          { key: "contactPhysician", label: "Contact Physician Immediately" },
         ];
         const checkedItems = Object.fromEntries(categories.map(({ key }) => [key, []]));
         const checklist = Object.fromEntries(categories.map(({ key }) => [key, []]));
@@ -704,7 +730,16 @@
               const description = document.createElement("span");
               checkbox.type = "checkbox";
               checkbox.checked = checkedItems[category][index] || false;
-              description.textContent = text;
+              if (category === "medicine" && typeof text === "object") {
+                description.className = "patient-medication";
+                const name = document.createElement("strong"); name.textContent = text.name || "Not documented";
+                const fields = document.createElement("span"); fields.className = "medication-facts";
+                for (const field of ["strength", "dose", "frequency"]) {
+                  const value = document.createElement("span"); value.textContent = `${field[0].toUpperCase()+field.slice(1)}: ${text[field] || "Not documented"}`; fields.append(value);
+                }
+                const instructions = document.createElement("span"); instructions.textContent = `Instructions: ${text.instructions || "Not documented"}`;
+                description.append(name, fields, instructions);
+              } else description.textContent = category === "medicine" ? medicationText(text) : category === "woundCare" ? woundCareText(text) : text;
               label.append(checkbox, description);
               item.append(label);
               return item;
@@ -787,10 +822,13 @@
             if (result.checklist && typeof result.checklist === "object") {
               categories.forEach(({ key }) => {
                 checklist[key] = Array.isArray(result.checklist[key])
-                  ? result.checklist[key].filter((item) => typeof item === "string")
+                  ? result.checklist[key].filter((item) => typeof item === "string" || (key === "medicine" && isMedication(item)) || (key === "woundCare" && isWoundCare(item)))
                   : [];
               });
             }
+            patientData.value = categories.map(({key, label}) => `${label}:\n${checklist[key].map(item => key === "medicine" ? medicationText(item) : key === "woundCare" ? woundCareText(item) : item).join("\n")}`).join("\n\n");
+            renderComparison(document.querySelector('#medication-comparison'), result.medicationComparison || null);
+            if (result.medicationComparison) patientData.value += '\n\nMedication comparison:\n' + comparisonReadAloud(result.medicationComparison);
             showChecklistCategory(activeCategory);
 
             if (result.pdfUrl) {
