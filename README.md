@@ -25,7 +25,7 @@ removing the setting or setting it to `false` after the test.
 Start the app with `npm start`.
 For local AWS access, use an AWS profile rather than placing access keys in `.env`.
 
-Both pages offer a language selector backed by AWS Translate. It loads the
+The patient page offers a language selector backed by AWS Translate. It loads the
 supported-language list from AWS and submits the complete page as an HTML
 document to AWS Translate Document; the patient page also includes the loaded
 discharge text. Synchronous document translation supports HTML documents up to
@@ -35,6 +35,11 @@ The AWS identity used by the app needs `translate:ListLanguages` and
 `translate:TranslateDocument` permissions in addition to any storage
 permissions.
 Page text submitted for translation is processed by AWS Translate.
+If translation reports that the app API cannot be reached, verify that
+`/api/translate` and `/api/translate/languages` are routed to the deployed Lambda.
+If the app reports an AWS error code and request ID, use those values to locate
+the corresponding `aws_translate_document_failed` entry in CloudWatch Logs; the
+log records diagnostics but never the submitted page content.
 
 ## Deploy to AWS Lambda
 
@@ -45,6 +50,9 @@ at least 30 seconds so synchronous AWS Translate document requests can finish
 before Lambda terminates the invocation. Configure `BEDROCK_MODEL_ID`,
 `AWS_REGION`, `DYNAMODB_TABLE_NAME`, `S3_BUCKET_NAME`,
 `ELEVENLABS_API_KEY`, and `ELEVENLABS_VOICE_ID` as Lambda environment variables;
+set `DYNAMODB_TABLE_NAME` to the exact name of the existing DynamoDB table whose
+partition key is the string `dischargeId`; without this setting, creating or
+loading patient discharge records returns HTTP 503.
 provide `bedrock-mantle:CreateInference`, S3, DynamoDB, AWS Translate, and
 CloudWatch Logs access through the Lambda execution role. The role needs
 `translate:ListLanguages` and `translate:TranslateDocument` permissions for

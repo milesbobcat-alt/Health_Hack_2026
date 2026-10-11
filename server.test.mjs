@@ -156,6 +156,7 @@ test("serves the intake page from the root path", async () => {
   assert.match(page, /id="checklist-review"/);
   assert.match(page, /Confirm &amp; Create Patient Link/);
   assert.match(page, /id="submit-discharge"/);
+  assert.doesNotMatch(page, /translate\.js/);
 });
 
 test("serves the patient view page with read-aloud controls", async () => {
@@ -182,7 +183,7 @@ test("serves the patient view page with read-aloud controls", async () => {
   assert.match(page, /class="button avs-document-link"/);
   assert.match(page, /\/api\/discharge\//);
   assert.match(page, /\/api\/speak/);
-  assert.match(page, /src="\/translate\.js\?v=html-document-v3"/);
+  assert.match(page, /src="\/translate\.js\?v=html-document-v6"/);
 });
 
 test("serves shared AWS Translate client-side controls", async () => {
@@ -196,8 +197,15 @@ test("serves shared AWS Translate client-side controls", async () => {
   assert.match(script, /\/api\/translate\/languages/);
   assert.match(script, /"Content-Type": "text\/html; charset=utf-8"/);
   assert.match(script, /"X-Target-Language": targetLanguage/);
+  assert.match(script, /async function fetchApi\(url, options, connectionError\)/);
+  assert.doesNotMatch(script, /error instanceof TypeError\s*\?/);
+  assert.match(script, /clone\.querySelector\("body"\)/);
+  assert.doesNotMatch(script, /clone\.body\.append/);
   assert.match(script, /translation-text-\$\{index\}/);
   assert.match(script, /getElementById\(item\.id\)/);
+  assert.match(script, /querySelector\("\.patient-header, \.page-header"\)/);
+  assert.doesNotMatch(script, /position: fixed/);
+  assert.match(script, /translation API \(\/api\/translate\)/);
   assert.doesNotMatch(script, /AWS Translate returned HTML with an unexpected structure/);
 });
 
@@ -370,6 +378,47 @@ test("translates a raw HTML API Gateway Lambda request body", async () => {
   );
 });
 
+test("returns a safe AWS Translate diagnostic and logs no document content on failure", async () => {
+  const errors = [];
+  const { url } = await startServer({
+    awsRegion: "us-west-2",
+    logger: { info() {}, error: (entry) => errors.push(entry) },
+    translateClient: {
+      send: async (command) => {
+        if (command instanceof ListLanguagesCommand) {
+          return { Languages: [{ LanguageCode: "es", LanguageName: "Spanish" }] };
+        }
+        const error = new Error("Source document text must not be logged.");
+        error.name = "AccessDeniedException";
+        error.$metadata = { requestId: "aws-request-123", httpStatusCode: 403 };
+        throw error;
+      },
+    },
+  });
+  const privateDocumentText = "Private patient discharge instruction";
+  const response = await fetch(`${url}/api/translate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "X-Target-Language": "es",
+    },
+    body: `<html><body>${privateDocumentText}</body></html>`,
+  });
+
+  assert.equal(response.status, 502);
+  const result = await response.json();
+  assert.deepEqual(result.diagnostic, {
+    requestId: response.headers.get("x-request-id"),
+    code: "AccessDeniedException",
+    region: "us-west-2",
+  });
+  assert.match(result.error, /AWS Translate could not translate/);
+  assert.doesNotMatch(JSON.stringify(result), /Private patient discharge instruction/);
+  assert.doesNotMatch(errors.join("\n"), /Private patient discharge instruction|Source document text/);
+  assert.match(errors.join("\n"), /aws_translate_document_failed/);
+  assert.match(errors.join("\n"), /AccessDeniedException/);
+});
+
 test("rejects invalid HTML documents and unsupported AWS Translate languages", async () => {
   const { url } = await startServer({
     translateClient: {
@@ -516,7 +565,7 @@ test("accepts valid checklist JSON wrapped in Markdown and explanatory text", as
 
 test("rejects malformed Bedrock checklist output", async () => {
   const { url } = await startServer({
-    awsRegion: "us-east-1",
+    awsRegion: "us-west-2",
     bedrockModelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
     bedrockClient: {
       messages: {
@@ -543,7 +592,7 @@ test("rejects malformed Bedrock checklist output", async () => {
     contentBlockTypes: ["text"],
     stopReason: "end_turn",
     responseTextLength: '{"medicine":[],"woundCare":[]}'.length,
-    region: "us-east-1",
+    region: "us-west-2",
     modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
   });
 });

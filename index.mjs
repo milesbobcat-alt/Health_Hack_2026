@@ -1,4 +1,3 @@
-import "dotenv/config";
 import express from "express";
 import multer from "multer";
 import serverless from "serverless-http";
@@ -6,7 +5,6 @@ import { randomUUID } from "node:crypto";
 import { createServer as createHttpServer } from "node:http";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { v4 as uuidv4 } from "uuid";
 import { AnthropicBedrockMantle } from "@anthropic-ai/bedrock-sdk";
 import {
   DynamoDBClient,
@@ -28,6 +26,10 @@ import {
 } from "@aws-sdk/client-translate";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import pdfParse from "pdf-parse";
+
+if (!process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  await import("dotenv/config");
+}
 
 const projectDirectory = import.meta.dirname;
 const defaultMaxAudioBytes = 25 * 1024 * 1024;
@@ -160,7 +162,7 @@ function createApp({
   s3Client,
   translateClient,
   getSignedUrlImpl = getSignedUrl,
-  idGenerator = uuidv4,
+  idGenerator = randomUUID,
   now = Date.now,
   maxPdfBytes: uploadLimit = maxPdfBytes,
   logger = console,
@@ -287,8 +289,23 @@ function createApp({
           })),
       });
     } catch (error) {
-      console.error("Failed to list AWS Translate languages.", error);
-      sendJson(response, 502, { error: "Available languages could not be loaded from AWS Translate." });
+      const code = typeof error?.name === "string" ? error.name.slice(0, 80) : "TranslateError";
+      logger.error(JSON.stringify({
+        event: "aws_translate_languages_failed",
+        requestId: request.requestId,
+        region: awsRegion || "SDK default",
+        code,
+        awsRequestId: error?.$metadata?.requestId,
+        httpStatusCode: error?.$metadata?.httpStatusCode,
+      }));
+      sendJson(response, 502, {
+        error: "Available languages could not be loaded from AWS Translate.",
+        diagnostic: {
+          requestId: request.requestId,
+          code,
+          region: awsRegion || "SDK default",
+        },
+      });
     }
   });
 
@@ -363,8 +380,25 @@ function createApp({
         translatedHtml: Buffer.from(translatedContent).toString("utf8"),
       });
     } catch (error) {
-      console.error("Failed to translate HTML document with AWS Translate.", error);
-      sendJson(response, 502, { error: "AWS Translate could not translate the HTML document. Please try again." });
+      const code = typeof error?.name === "string" ? error.name.slice(0, 80) : "TranslateError";
+      logger.error(JSON.stringify({
+        event: "aws_translate_document_failed",
+        requestId: request.requestId,
+        region: awsRegion || "SDK default",
+        targetLanguage,
+        documentBytes: Buffer.byteLength(html, "utf8"),
+        code,
+        awsRequestId: error?.$metadata?.requestId,
+        httpStatusCode: error?.$metadata?.httpStatusCode,
+      }));
+      sendJson(response, 502, {
+        error: "AWS Translate could not translate the HTML document. Please try again.",
+        diagnostic: {
+          requestId: request.requestId,
+          code,
+          region: awsRegion || "SDK default",
+        },
+      });
     }
   });
 

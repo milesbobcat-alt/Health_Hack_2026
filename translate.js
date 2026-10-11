@@ -3,19 +3,18 @@
     const controlStyles = document.createElement("style");
     controlStyles.textContent = `
       .page-translation-control {
-        position: fixed;
-        z-index: 1000;
-        inset: auto 1rem 1rem auto;
+        box-sizing: border-box;
         display: grid;
-        grid-template-columns: minmax(10rem, 1fr) auto;
+        grid-template-columns: minmax(10rem, 14rem) auto minmax(0, 1fr);
         gap: 0.5rem;
         align-items: center;
-        max-width: calc(100vw - 2rem);
+        width: min(100% - 3rem, 76rem);
+        max-width: 76rem;
+        margin: 0 auto 0.75rem;
         padding: 0.75rem;
         border: 1px solid #cbd5e1;
-        border-radius: 0.75rem;
+        border-radius: 0.4rem;
         background: #fff;
-        box-shadow: 0 0.25rem 1rem rgb(15 23 42 / 18%);
         color: #172033;
         font: 500 0.875rem/1.4 system-ui, sans-serif;
       }
@@ -41,13 +40,15 @@
         opacity: 0.65;
       }
       .page-translation-control [role="status"] {
-        grid-column: 1 / -1;
         margin: 0;
       }
       @media (max-width: 30rem) {
         .page-translation-control {
-          inset: auto 0.5rem 0.5rem;
-          max-width: none;
+          width: calc(100% - 2rem);
+          grid-template-columns: minmax(0, 1fr) auto;
+        }
+        .page-translation-control [role="status"] {
+          grid-column: 1 / -1;
         }
       }
     `;
@@ -75,7 +76,12 @@
     status.setAttribute("aria-live", "polite");
 
     control.append(languageSelect, translateButton, status);
-    document.body.append(control);
+    const header = document.querySelector(".patient-header, .page-header");
+    if (header) {
+      header.append(control);
+    } else {
+      document.body.prepend(control);
+    }
 
     const originalLanguage = document.documentElement.lang;
     const originalDirection = document.documentElement.dir;
@@ -91,6 +97,7 @@
     async function readApiJson(response, endpoint) {
       const contentType = response.headers.get("content-type") || "unknown content type";
       const body = await response.text();
+      const requestId = response.headers.get("x-request-id");
       let result;
       try {
         result = JSON.parse(body);
@@ -101,9 +108,26 @@
         );
       }
       if (!response.ok) {
-        throw new Error(result.error || `${endpoint} failed with HTTP ${response.status}.`);
+        const diagnostic = result.diagnostic || {};
+        const details = [
+          diagnostic.code,
+          diagnostic.region ? `region: ${diagnostic.region}` : null,
+          diagnostic.requestId || requestId ? `Request ID: ${diagnostic.requestId || requestId}` : null,
+        ].filter(Boolean).join("; ");
+        throw new Error(
+          `${result.error || `${endpoint} failed with HTTP ${response.status}.`}${details ? ` (${details})` : ""}`,
+        );
       }
       return result;
+    }
+
+    async function fetchApi(url, options, connectionError) {
+      try {
+        return await fetch(url, options);
+      } catch (error) {
+        const detail = error instanceof Error && error.message ? ` (${error.message})` : "";
+        throw new Error(`${connectionError}${detail}`);
+      }
     }
 
     function createTranslationDocument() {
@@ -157,7 +181,11 @@
           valueContainer.append(marker);
           translationNodes.push({ id: marker.id, type: "value", fieldId: field.id });
         }
-        if (valueContainer.childElementCount) clone.body.append(valueContainer);
+        if (valueContainer.childElementCount) {
+          const body = clone.querySelector("body");
+          if (!body) throw new Error("The page body could not be prepared for translation.");
+          body.append(valueContainer);
+        }
       }
       return {
         html: `<!DOCTYPE html>\n${clone.outerHTML}`,
@@ -227,7 +255,11 @@
 
     async function loadLanguages() {
       try {
-        const response = await fetch("/api/translate/languages");
+        const response = await fetchApi(
+          "/api/translate/languages",
+          undefined,
+          "Could not reach the app's language-list API (/api/translate/languages). Check the API Gateway/Lambda connection.",
+        );
         const result = await readApiJson(response, "The language-list endpoint");
         if (!Array.isArray(result.languages)) throw new Error("AWS Translate returned an invalid language list.");
 
@@ -241,9 +273,7 @@
         setBusy(false);
         status.textContent = `${result.languages.length} AWS Translate languages available.`;
       } catch (error) {
-        status.textContent = error instanceof TypeError
-          ? "Could not reach the translation service."
-          : error.message || "Available languages could not be loaded.";
+        status.textContent = error.message || "Available languages could not be loaded.";
       }
     }
 
@@ -263,15 +293,19 @@
       const originalState = captureOriginalPage();
       try {
         const translationDocument = createTranslationDocument();
-        const response = await fetch("/api/translate", {
-          method: "POST",
-          cache: "no-store",
-          headers: {
-            "Content-Type": "text/html; charset=utf-8",
-            "X-Target-Language": targetLanguage,
+        const response = await fetchApi(
+          "/api/translate",
+          {
+            method: "POST",
+            cache: "no-store",
+            headers: {
+              "Content-Type": "text/html; charset=utf-8",
+              "X-Target-Language": targetLanguage,
+            },
+            body: translationDocument.html,
           },
-          body: translationDocument.html,
-        });
+          "Could not reach the app's translation API (/api/translate). Check the API Gateway/Lambda connection. If this continues, check the browser Network panel.",
+        );
         const result = await readApiJson(response, "The translation endpoint");
         if (typeof result.translatedHtml !== "string" || !result.translatedHtml.trim()) {
           throw new Error("AWS Translate returned an invalid HTML document.");
@@ -291,9 +325,7 @@
         status.textContent = "Page translated. Verify clinical instructions before relying on them.";
       } catch (error) {
         restoreOriginalPage(originalState);
-        status.textContent = error instanceof TypeError
-          ? "Could not reach AWS Translate. Check your connection and try again."
-          : error.message || "The page could not be translated.";
+        status.textContent = error.message || "The page could not be translated.";
       } finally {
         setBusy(false);
       }
