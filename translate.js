@@ -82,6 +82,8 @@
     let translatedItems = [];
     let isTranslated = false;
     const translateValues = document.body.dataset.translateValues === "true";
+    const maxTranslationChunkBytes = 9_000;
+    const translationBatchSize = 8;
 
     function setBusy(busy) {
       languageSelect.disabled = busy;
@@ -144,6 +146,36 @@
       return items;
     }
 
+    function splitText(text) {
+      const chunks = [];
+      const encoder = new TextEncoder();
+      let characters = [];
+      let byteLength = 0;
+      let lastWhitespace = -1;
+
+      for (const character of text) {
+        const characterBytes = encoder.encode(character).length;
+        if (byteLength + characterBytes > maxTranslationChunkBytes) {
+          let splitAt = lastWhitespace + 1;
+          if (splitAt <= 0) splitAt = characters.length;
+          chunks.push(characters.slice(0, splitAt).join(""));
+          characters = characters.slice(splitAt);
+          byteLength = 0;
+          lastWhitespace = -1;
+          for (let index = 0; index < characters.length; index += 1) {
+            byteLength += encoder.encode(characters[index]).length;
+            if (/\s/u.test(characters[index])) lastWhitespace = index;
+          }
+        }
+
+        characters.push(character);
+        byteLength += characterBytes;
+        if (/\s/u.test(character)) lastWhitespace = characters.length - 1;
+      }
+      if (characters.length) chunks.push(characters.join(""));
+      return chunks;
+    }
+
     function restorePage() {
       for (const item of translatedItems) {
         if (item.property === "nodeValue") {
@@ -204,32 +236,36 @@
         status.textContent = "There is no page text to translate.";
         return;
       }
-      if (items.length > 250) {
-        status.textContent = "This page has too much text to translate in one request.";
-        return;
-      }
-
       setBusy(true);
-      status.textContent = "Translating page with AWS Translate…";
+      const translationChunks = items.map((item) => splitText(item.text));
+      const queuedChunks = translationChunks.flat();
+      const translatedChunks = [];
+      const totalBatches = Math.ceil(queuedChunks.length / translationBatchSize);
       try {
-        const response = await fetch("/api/translate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            targetLanguage,
-            texts: items.map((item) => item.text),
-          }),
-        });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "The page could not be translated.");
-        if (!Array.isArray(result.translatedTexts)
-          || result.translatedTexts.length !== items.length
-          || result.translatedTexts.some((text) => typeof text !== "string")) {
-          throw new Error("AWS Translate returned an invalid translation.");
+        for (let offset = 0; offset < queuedChunks.length; offset += translationBatchSize) {
+          const batch = queuedChunks.slice(offset, offset + translationBatchSize);
+          status.textContent = `Translating page with AWS Translate (${Math.floor(offset / translationBatchSize) + 1}/${totalBatches})…`;
+          const response = await fetch("/api/translate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ targetLanguage, texts: batch }),
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || "The page could not be translated.");
+          if (!Array.isArray(result.translatedTexts)
+            || result.translatedTexts.length !== batch.length
+            || result.translatedTexts.some((text) => typeof text !== "string")) {
+            throw new Error("AWS Translate returned an invalid translation.");
+          }
+          translatedChunks.push(...result.translatedTexts);
         }
 
+        let chunkIndex = 0;
         items.forEach((item, index) => {
-          const translatedText = result.translatedTexts[index];
+          const translatedText = translatedChunks
+            .slice(chunkIndex, chunkIndex + translationChunks[index].length)
+            .join("");
+          chunkIndex += translationChunks[index].length;
           if (item.property === "nodeValue") {
             item.node.nodeValue = `${item.prefix}${translatedText}${item.suffix}`;
           } else if (item.node === document) {
