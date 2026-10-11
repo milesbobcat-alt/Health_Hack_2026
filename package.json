@@ -1,0 +1,23 @@
+{
+  "name": "discharge-ai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@anthropic-ai/bedrock-sdk": "^0.34.4",
+    "@aws-sdk/client-dynamodb": "^3.850.0",
+    "@aws-sdk/client-s3": "^3.850.0",
+    "@aws-sdk/lib-dynamodb": "^3.850.0",
+    "@aws-sdk/s3-request-presigner": "^3.850.0",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "pdf-parse": "^1.1.4",
+    "serverless-http": "^3.2.0",
+    "uuid": "^11.1.0"
+  }
+}

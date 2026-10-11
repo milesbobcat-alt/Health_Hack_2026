@@ -1,136 +1,917 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Your care plan</title>
-  <style>
-    :root { font-family: "Open Sans", Arial, sans-serif; color:#182433; background:#f5f7fb; }
-    * { box-sizing:border-box; } body { margin:0; line-height:1.45; }
-    main { width:min(100% - 2rem, 760px); margin:0 auto; padding:1.5rem 0 3rem; }
-    header { padding:.8rem max(1rem,calc((100vw - 760px)/2)); border-bottom:1px solid #dce3ed; background:#fff; color:#315fc4; font-size:.85rem; font-weight:700; }
-    h1 { margin:.25rem 0 .5rem; font-size:clamp(1.8rem,5vw,2.4rem); letter-spacing:-.035em; line-height:1.15; }
-    h2 { margin:0; font-size:1.05rem; }
-    .lead { margin:0; color:#58677c; font-size:.95rem; }
-    .hero { padding:1.3rem 1.4rem; border:1px solid #dce3ed; border-radius:12px; background:#fff; }
-    .eyebrow { color:#315fc4; font-size:.73rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
-    .progress-card { margin-top:1rem; display:grid; gap:.55rem; padding:.8rem .9rem; border:1px solid #e1e7ef; border-radius:9px; background:#f8faff; }
-    .progress-head { display:flex; justify-content:space-between; gap:1rem; font-size:.92rem; font-weight:700; }
-    progress { width:100%; height:.55rem; accent-color:#315fc4; }
-    .group { margin:.8rem 0; padding:.9rem 1rem; background:#fff; border:1px solid #dce3ed; border-radius:10px; }
-    .group-head { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:.35rem; }
-    .count { color:#617087; font-size:.8rem; }
-    .task { display:flex; align-items:flex-start; gap:.7rem; padding:.75rem .1rem; border-top:1px solid #edf0f4; cursor:pointer; }
-    .task input { width:1.25rem; height:1.25rem; margin:.08rem 0 0; flex:none; accent-color:#315fc4; }
-    .task span { display:block; font-size:1rem; font-weight:550; }
-    .task small { display:inline-block; margin-top:.2rem; color:#617087; font-size:.78rem; }
-    .task .task-details { display:flex; flex-wrap:wrap; gap:.25rem .65rem; margin-top:.3rem; color:#617087; font-size:.82rem; font-weight:400; }
-    .task.done span { color:#748196; text-decoration:line-through; }
-    .warnings { border-left:3px solid #b23b3b; background:#fff; }
-    .warnings h2 { margin-bottom:.45rem; }
-    .warnings p { margin:.1rem 0; color:#617087; font-size:.85rem; }
-    .warnings li { margin:.35rem 0; }
-    .medication-panel { margin:.8rem 0; padding:.9rem 1rem; border:1px solid #dce3ed; border-radius:10px; background:#fff; }
-    .medication-panel h2 { margin-bottom:.6rem; }
-    .medication-panel > p { color:#617087; font-size:.85rem; }
-    .medication-table { width:100%; border-collapse:collapse; table-layout:fixed; }
-    .medication-table th,.medication-table td { width:50%; padding:.65rem; border:1px solid #dce3ed; text-align:left; vertical-align:top; }
-    .medication-table th { background:#f5f8fd; color:#315fc4; }
-    .medication-table td { overflow-wrap:anywhere; }
-    .medication-table tr:nth-child(even) td { background:#fbfcfe; }
-    @media(max-width:600px) { .medication-table th,.medication-table td { padding:.5rem; font-size:.88rem; } }
-    #checklist-status { min-height:1.3rem; } #expiry-note { color:#68778b; font-size:.78rem; }
-    a { color:#315fc4; } :focus-visible { outline:3px solid #315fc4; outline-offset:3px; }
-    @media(max-width:600px) { .hero { padding:1rem; } .group { padding:.8rem; } }
-  </style>
-</head>
-<body>
-  <header>Care checklist</header>
-<main>
-  <section class="hero"><div class="eyebrow">Your next steps</div><h1>Care checklist</h1><p class="lead">Check off each step as you complete it.</p>
-    <div class="progress-card"><div class="progress-head"><span id="checklist-status" role="status" aria-live="polite">Loading checklist…</span><span id="progress-number"></span></div><progress id="progress" value="0" max="1"></progress></div>
-  </section>
-  <div id="checklist-items"></div><section id="warning-section" class="group warnings" hidden><h2>Warning signs</h2><ul id="warning-items"></ul></section>
-  <section id="medication-section" class="medication-panel" hidden>
-    <h2>Medication comparison</h2><p>Medication lists copied from the provided instructions.</p>
-    <table class="medication-table"><thead><tr><th>Before hospitalization</th><th>After hospitalization</th></tr></thead><tbody id="medication-rows"></tbody></table>
-  </section>
-  <p id="expiry-note"></p>
-</main>
-<script>
-(() => {
-  const id = location.pathname.split("/").filter(Boolean).at(-1);
-  const status = document.querySelector("#checklist-status");
-  const container = document.querySelector("#checklist-items");
-  const names = { medication:"Medicines", care:"Care", testing:"Tests", avoid:"Avoid / do not" };
-  async function load() {
-    try { const response = await fetch(`/api/checklists/${encodeURIComponent(id)}`); const plan = await response.json(); if (!response.ok) throw new Error(plan.error || "Checklist unavailable."); render(plan); }
-    catch (error) { status.textContent = error.message; }
-  }
-  function render(plan) {
-    container.replaceChildren(); const completed = plan.items.filter(item => item.done).length;
-    status.textContent = completed === plan.items.length ? "All steps checked off" : `${plan.items.length - completed} steps to go`;
-    document.querySelector("#progress-number").textContent = `${completed} / ${plan.items.length}`;
-    const progress = document.querySelector("#progress"); progress.max = plan.items.length; progress.value = completed;
-    for (const [category, name] of Object.entries(names)) {
-      const entries = plan.items.map((item,index) => ({item,index})).filter(({item}) => (item.category || "other") === category);
-      if (!entries.length) continue;
-      const section = document.createElement("section"); section.className = "group";
-      const head = document.createElement("div"); head.className = "group-head"; const h = document.createElement("h2"); h.textContent = name;
-      const count = document.createElement("span"); count.className = "count"; const left = entries.filter(({item}) => !item.done).length; count.textContent = `${left} left`; head.append(h,count); section.append(head);
-      for (const {item,index} of entries) {
-        const label = document.createElement("label"); label.className = `task${item.done ? " done" : ""}`;
-        const checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.checked = item.done;
-        const content = document.createElement("div"); const text = document.createElement("span");
-        text.textContent = ["medication", "testing"].includes(category) ? (item.name || item.text) : (item.description || item.text);
-        content.append(text);
-        const details = [];
-        if (category === "medication") {
-          if (item.strength) details.push(["Strength", item.strength]);
-          if (item.dose) details.push(["Dose", item.dose]);
-          if (item.frequency) details.push(["Frequency", item.frequency]);
-          if (item.timing) details.push(["Time", item.timing]);
-          if (item.due) details.push(["Due", item.due]);
-        } else if (category === "care" || category === "testing") {
-          if (item.frequency) details.push(["Frequency", item.frequency]);
-          if (item.timing) details.push(["Timing", item.timing]);
-          if (item.due) details.push(["Due", item.due]);
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Patient View</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Open Sans", Arial, sans-serif;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        --page-background: #f2f2f2;
+        --surface: #ffffff;
+        --text: #1f1f1f;
+        --muted-text: #595959;
+        --placeholder: #737373;
+        --link: #3834a8;
+        --visited-link: #9a5ba5;
+        --accent: #db0084;
+        --accent-action: #b0006a;
+        --border: #767676;
+        --disabled-background: #e0e0e0;
+        --disabled-text: #595959;
+        --focus: #a00060;
+        --error: #b20000;
+      }
+
+      :root[data-theme="beige"] {
+        --page-background: #f5f0e6;
+        --surface: #fffdf8;
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --page-background: #1f1f1f;
+        --surface: #292929;
+        --text: #f5f5f5;
+        --muted-text: #d0d0d0;
+        --placeholder: #c2c2c2;
+        --link: #d478ff;
+        --visited-link: #e6a6ff;
+        --accent: #db0084;
+        --accent-action: #b0006a;
+        --border: #b8b8b8;
+        --disabled-background: #454545;
+        --disabled-text: #d0d0d0;
+        --focus: #ff83ca;
+        --error: #ff8585;
+      }
+
+      html {
+        min-height: 100%;
+        font-size: 100%;
+        background-color: var(--page-background);
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        background-color: var(--page-background);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 1.25rem;
+        font-weight: 400;
+        line-height: 1.5;
+        letter-spacing: 0.01em;
+        word-spacing: 0.08em;
+        text-align: left;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6 {
+        color: var(--text);
+        font-weight: 600;
+        line-height: 1.35;
+        text-align: left;
+      }
+
+      p {
+        max-width: 70ch;
+        margin-block: 0 2em;
+      }
+
+      a {
+        color: var(--link);
+        text-decoration: underline;
+        text-underline-offset: 0.15em;
+      }
+
+      a:visited {
+        color: var(--visited-link);
+      }
+
+      a:hover {
+        text-decoration-color: var(--accent);
+        text-decoration-thickness: 0.15em;
+      }
+
+      :focus-visible {
+        outline: 3px dashed var(--focus);
+        outline-offset: 3px;
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        color: var(--text);
+        font: inherit;
+      }
+
+      button,
+      input[type="button"],
+      input[type="submit"],
+      input[type="reset"],
+      .button {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 1.25rem 1.875rem;
+        border: 2px solid var(--link);
+        border-radius: 3px;
+        background-color: var(--link);
+        color: #ffffff;
+        cursor: pointer;
+        text-align: center;
+      }
+
+      button:disabled,
+      input:disabled,
+      select:disabled,
+      textarea:disabled,
+      .button[aria-disabled="true"] {
+        border-color: var(--disabled-background);
+        background-color: var(--disabled-background);
+        color: var(--disabled-text);
+        cursor: not-allowed;
+      }
+
+      .button-secondary {
+        border-color: var(--link);
+        background-color: var(--surface);
+        color: var(--link);
+      }
+
+      .button-tertiary {
+        border-color: transparent;
+        background-color: transparent;
+        color: var(--link);
+        text-decoration: underline;
+      }
+
+      @media (hover: hover) {
+        button:not(:disabled):hover,
+        input[type="button"]:not(:disabled):hover,
+        input[type="submit"]:not(:disabled):hover,
+        input[type="reset"]:not(:disabled):hover,
+        .button:not([aria-disabled="true"]):hover {
+          border-color: var(--accent-action);
+          background-color: var(--accent-action);
         }
-        if (details.length) {
-          const detailList = document.createElement("div"); detailList.className = "task-details";
-          for (const [label, value] of details) { const detail = document.createElement("span"); detail.textContent = `${label}: ${value}`; detailList.append(detail); }
-          content.append(detailList);
+
+        .button-secondary:not([aria-disabled="true"]):hover {
+          color: #ffffff;
         }
-        label.append(checkbox,content); section.append(label);
-        checkbox.addEventListener("change", async () => {
-          checkbox.disabled = true;
-          try { const response = await fetch(`/api/checklists/${encodeURIComponent(id)}/items`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({index,done:checkbox.checked}) }); const updated = await response.json(); if (!response.ok) throw new Error(updated.error || "Could not save this step."); render(updated); }
-          catch(error) { status.textContent = error.message; checkbox.disabled = false; checkbox.checked = !checkbox.checked; }
+
+        .button-tertiary:not([aria-disabled="true"]):hover {
+          background-color: var(--surface);
+          color: var(--accent-action);
+        }
+      }
+
+      input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]),
+      select,
+      textarea {
+        box-sizing: border-box;
+        min-height: 3rem;
+        padding: 0.65rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background-color: var(--surface);
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+        border: 2px solid var(--link);
+      }
+
+      input::placeholder,
+      textarea::placeholder {
+        color: var(--placeholder);
+        opacity: 1;
+      }
+
+      input[type="search"] {
+        min-width: 27ch;
+      }
+
+      input[type="checkbox"],
+      input[type="radio"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--link);
+      }
+
+      label {
+        display: inline-block;
+        min-height: 44px;
+        padding: 0.5rem 0.25rem;
+        color: var(--text);
+      }
+
+      form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1rem;
+      }
+
+      [aria-invalid="true"],
+      .field-error {
+        border-color: var(--error);
+      }
+
+      .field-error {
+        color: var(--error);
+      }
+
+      [role="tab"][aria-selected="true"],
+      .tab[aria-selected="true"] {
+        border-bottom: 3px solid var(--link);
+        color: var(--link);
+        font-weight: 600;
+      }
+
+      :root[data-text-spacing="wide"] body {
+        line-height: 1.5;
+        letter-spacing: 0.2em;
+        word-spacing: 0.16em;
+      }
+
+      .patient-header {
+        border-bottom: 1px solid var(--border);
+        background-color: var(--surface);
+      }
+
+      .patient-header-inner {
+        display: flex;
+        width: min(100% - 3rem, 76rem);
+        min-height: 4rem;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-inline: auto;
+      }
+
+      .patient-brand {
+        color: var(--link);
+        font-size: 1.25rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .patient-nav {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .patient-nav a {
+        display: inline-flex;
+        min-height: 44px;
+        align-items: center;
+        padding: 0.4rem 0.75rem;
+        border-radius: 3px;
+        font-size: 1rem;
+        text-decoration: none;
+      }
+
+      .patient-nav a[aria-current="page"] {
+        background-color: var(--link);
+        color: #ffffff;
+      }
+
+      .patient-label {
+        margin: 0;
+        color: var(--muted-text);
+        font-size: 1rem;
+      }
+
+      .patient-layout {
+        display: grid;
+        width: min(100% - 3rem, 76rem);
+        grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+        align-items: start;
+        gap: 1.5rem;
+        margin: 2rem auto;
+      }
+
+      .patient-primary,
+      .patient-sidebar {
+        display: grid;
+        min-width: 0;
+        gap: 1.25rem;
+      }
+
+      .patient-section,
+      .care-suggestions {
+        min-width: 0;
+        padding: 1.25rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background-color: var(--surface);
+      }
+
+      .patient-section h1,
+      .patient-section h2,
+      .care-suggestions h2 {
+        margin-block: 0 0.5rem;
+      }
+
+      .patient-section h1 {
+        font-size: 1.65rem;
+      }
+
+      .patient-section h2,
+      .care-suggestions h2 {
+        font-size: 1.3rem;
+      }
+
+      .section-description {
+        margin-block: 0 1rem;
+        color: var(--muted-text);
+      }
+
+      .checklist-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .checklist-tabs button {
+        min-height: 44px;
+        padding: 0.5rem 0.875rem;
+        border: 1px solid var(--border);
+        border-bottom: 3px solid transparent;
+        border-radius: 3px;
+        background: transparent;
+        color: var(--link);
+      }
+
+      .checklist-tabs button[aria-selected="true"] {
+        border-bottom-color: var(--link);
+        font-weight: 700;
+      }
+
+      .checklist-items {
+        display: grid;
+        gap: 0.75rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .checklist-items label {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-height: 4rem;
+        padding: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background: var(--surface);
+        font-size: 1.25rem;
+        font-weight: 600;
+      }
+
+      .checklist-items input {
+        flex: 0 0 auto;
+        width: 28px;
+        height: 28px;
+      }
+
+      .checklist-empty {
+        margin: 0;
+        padding: 1rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background: var(--surface);
+        color: var(--muted-text);
+      }
+
+      .follow-up textarea,
+      .care-suggestions textarea {
+        width: 100%;
+        min-height: 8rem;
+        resize: vertical;
+      }
+
+      .care-suggestions textarea {
+        height: 5rem;
+        min-height: 0;
+        overflow-y: scroll;
+      }
+
+      .care-suggestions {
+        padding: 1rem;
+      }
+
+      .care-suggestions .section-description {
+        margin-bottom: 0.5rem;
+      }
+
+      .follow-up {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border);
+      }
+
+      .follow-up h2 {
+        margin-block: 0 0.5rem;
+        font-size: 1.3rem;
+      }
+
+      .follow-up textarea {
+        min-height: 5rem;
+      }
+
+      .care-suggestions > label {
+        min-height: 0;
+        padding: 0.25rem 0;
+      }
+
+      .avs-document-link {
+        display: block;
+        width: fit-content;
+        margin-inline: auto;
+      }
+
+      .speech-controls {
+        display: grid;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+      }
+
+      .speech-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .speech-buttons button {
+        min-height: 44px;
+        padding: 0.55rem 0.875rem;
+      }
+
+      #speech-status {
+        margin: 0;
+        color: var(--muted-text);
+        font-size: 1rem;
+      }
+
+      @media (max-width: 52rem) {
+        .patient-header-inner,
+        .patient-layout {
+          width: min(100% - 2rem, 76rem);
+        }
+
+        .patient-layout {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 1rem;
+          margin-block: 1rem;
+        }
+
+        .patient-primary,
+        .patient-sidebar {
+          display: grid;
+          gap: 1rem;
+        }
+
+        .patient-primary > .patient-section:first-child,
+        .avs-section,
+        .care-suggestions,
+        .follow-up {
+          grid-column: auto;
+          grid-row: auto;
+        }
+      }
+
+      @media (max-width: 36rem) {
+        .patient-header-inner {
+          flex-wrap: wrap;
+          justify-content: flex-start;
+          padding-block: 0.5rem;
+        }
+
+        .patient-nav {
+          order: 3;
+          width: 100%;
+        }
+
+        .patient-label {
+          margin-left: auto;
+        }
+      }
+
+      ::selection {
+        background-color: var(--link);
+        color: #ffffff;
+      }
+
+      main {
+        width: min(100% - 2rem, 52rem);
+        margin-inline: auto;
+        padding-block: 2rem;
+      }
+
+      .patient-card {
+        display: grid;
+        gap: 1rem;
+        padding: 1.5rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background-color: var(--surface);
+      }
+
+      .patient-card h1,
+      .patient-card p {
+        margin: 0;
+      }
+
+      .tabs,
+      .playback-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+
+      [role="tab"] {
+        background: var(--surface);
+        color: var(--link);
+      }
+
+      [role="tabpanel"] {
+        padding-block: 1rem;
+      }
+
+      #patient-data {
+        width: 100%;
+        min-height: 15rem;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .patient-status {
+        min-height: 1.5em;
+        color: var(--muted-text);
+      }
+
+      .patient-status[data-state="error"] {
+        color: var(--error);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="patient-header">
+      <div class="patient-header-inner">
+        <a class="patient-brand" href="#overview">Homeward</a>
+        <nav class="patient-nav" aria-label="Patient navigation">
+          <a href="#overview" aria-current="page">Home</a>
+          <a href="#medicine-tab" data-category="medicine">Medicine</a>
+          <a href="#woundCare-tab" data-category="woundCare">Wound Care</a>
+          <a href="#followUps-tab" data-category="followUps">Follow Ups</a>
+          <a href="#additional-tab" data-category="additional">Additional</a>
+        </nav>
+        <p class="patient-label">Patient</p>
+      </div>
+    </header>
+
+    <main id="overview" class="patient-layout">
+      <div class="patient-primary">
+        <section class="patient-section" aria-labelledby="checklist-heading">
+          <h1 id="checklist-heading">Recovery checklist</h1>
+          <p class="section-description">From your after-visit summary (AVS)</p>
+
+          <div class="checklist-tabs" role="tablist" aria-label="Checklist category">
+            <button id="medicine-tab" type="button" role="tab" aria-selected="true" aria-controls="checklist-items" data-category="medicine">Medicine (0)</button>
+            <button id="woundCare-tab" type="button" role="tab" aria-selected="false" aria-controls="checklist-items" data-category="woundCare" tabindex="-1">Wound Care (0)</button>
+            <button id="followUps-tab" type="button" role="tab" aria-selected="false" aria-controls="checklist-items" data-category="followUps" tabindex="-1">Follow Ups (0)</button>
+            <button id="additional-tab" type="button" role="tab" aria-selected="false" aria-controls="checklist-items" data-category="additional" tabindex="-1">Additional (0)</button>
+          </div>
+
+          <ul id="checklist-items" class="checklist-items" aria-live="polite"></ul>
+        </section>
+
+        <section class="patient-section avs-section" aria-labelledby="avs-heading">
+          <h2 id="avs-heading">After-visit summary (AVS)</h2>
+          <p id="load-status" class="patient-status" role="status" aria-live="polite">Loading your discharge information…</p>
+          <a id="pdf-link" class="button avs-document-link" target="_blank" rel="noopener noreferrer" hidden>View or download discharge PDF</a>
+        </section>
+      </div>
+
+      <aside class="patient-sidebar">
+        <section class="care-suggestions" aria-labelledby="care-suggestions-heading">
+          <h2 id="care-suggestions-heading">Nurse: Care suggestions</h2>
+          <p class="section-description">Care suggestions shared by your nurse will appear here.</p>
+
+          <label for="patient-data">Care suggestions</label>
+          <textarea
+            id="patient-data"
+            name="patient-data"
+            rows="4"
+            maxlength="5000"
+            placeholder="Care suggestions will appear here"
+          ></textarea>
+
+          <div class="speech-controls">
+            <div class="speech-buttons">
+              <button id="read-aloud" type="button" disabled>Play Out Loud</button>
+              <button id="stop-reading" type="button" disabled>Stop reading</button>
+            </div>
+
+            <p id="speech-status" role="status" aria-live="polite"></p>
+            <audio id="patient-audio" controls preload="none" hidden></audio>
+          </div>
+
+          <section class="follow-up" aria-labelledby="follow-up-heading">
+            <h2 id="follow-up-heading">Follow-up questions</h2>
+            <p class="section-description">Write down questions to discuss with your care team.</p>
+            <label for="follow-up-questions">Your questions</label>
+            <textarea id="follow-up-questions" name="follow-up-questions" rows="4" placeholder="Type a question for your care team"></textarea>
+          </section>
+        </section>
+      </aside>
+    </main>
+
+    <script>
+      (() => {
+        const patientData = document.querySelector("#patient-data");
+        const loadStatus = document.querySelector("#load-status");
+        const pdfLink = document.querySelector("#pdf-link");
+        const readButton = document.querySelector("#read-aloud");
+        const stopButton = document.querySelector("#stop-reading");
+        const status = document.querySelector("#speech-status");
+        const audioPlayer = document.querySelector("#patient-audio");
+        const checklistTabs = [...document.querySelectorAll(".checklist-tabs [role='tab']")];
+        const checklistItems = document.querySelector("#checklist-items");
+        const categories = [
+          { key: "medicine", label: "Medicine" },
+          { key: "woundCare", label: "Wound Care" },
+          { key: "followUps", label: "Follow Ups" },
+          { key: "additional", label: "Additional" },
+        ];
+        const checkedItems = Object.fromEntries(categories.map(({ key }) => [key, []]));
+        const checklist = Object.fromEntries(categories.map(({ key }) => [key, []]));
+        let activeCategory = "medicine";
+        let audioUrl = null;
+
+        function setStatus(message, state = "idle") {
+          status.textContent = message;
+          status.dataset.state = state;
+        }
+
+        function setLoadStatus(message, state = "idle") {
+          loadStatus.textContent = message;
+          loadStatus.dataset.state = state;
+        }
+
+        function showChecklistCategory(category) {
+          checkedItems[activeCategory] = [...checklistItems.querySelectorAll("input[type='checkbox']")]
+            .map((checkbox) => checkbox.checked);
+          activeCategory = category;
+
+          const labels = checklist[category];
+          if (labels.length === 0) {
+            const empty = document.createElement("li");
+            empty.className = "checklist-empty";
+            empty.textContent = "No instructions required for this section.";
+            checklistItems.replaceChildren(empty);
+          } else {
+            checklistItems.replaceChildren(...labels.map((text, index) => {
+              const item = document.createElement("li");
+              const label = document.createElement("label");
+              const checkbox = document.createElement("input");
+              const description = document.createElement("span");
+              checkbox.type = "checkbox";
+              checkbox.checked = checkedItems[category][index] || false;
+              description.textContent = text;
+              label.append(checkbox, description);
+              item.append(label);
+              return item;
+            }));
+          }
+
+          checklistTabs.forEach((tab) => {
+            const selected = tab.dataset.category === category;
+            tab.setAttribute("aria-selected", String(selected));
+            tab.tabIndex = selected ? 0 : -1;
+            const itemCount = checklist[tab.dataset.category].length;
+            const categoryLabel = categories.find(({ key }) => key === tab.dataset.category)?.label;
+            tab.textContent = `${categoryLabel} (${itemCount})`;
+          });
+        }
+
+        checklistTabs.forEach((tab, index) => {
+          tab.addEventListener("click", () => {
+            showChecklistCategory(tab.dataset.category);
+          });
+          tab.addEventListener("keydown", (event) => {
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+            event.preventDefault();
+            const offset = event.key === "ArrowRight" ? 1 : -1;
+            const nextTab = checklistTabs[(index + offset + checklistTabs.length) % checklistTabs.length];
+            nextTab.focus();
+            showChecklistCategory(nextTab.dataset.category);
+          });
         });
-      }
-      container.append(section);
-    }
-    const warningSection = document.querySelector("#warning-section"); const warningItems = document.querySelector("#warning-items"); warningItems.replaceChildren();
-    for (const warning of plan.warnings || []) { const li = document.createElement("li"); li.textContent = warning; warningItems.append(li); }
-    warningSection.hidden = !warningItems.children.length;
-    const medicationSection = document.querySelector("#medication-section");
-    const beforeList = plan.medicationChanges?.before || []; const afterList = plan.medicationChanges?.after || [];
-    const rows = document.querySelector("#medication-rows"); rows.replaceChildren();
-    if (beforeList.length || afterList.length) {
-      const rowCount = Math.max(beforeList.length, afterList.length);
-      for (let index = 0; index < rowCount; index++) {
-        const row = document.createElement("tr");
-        for (const entry of [beforeList[index], afterList[index]]) {
-          const cell = document.createElement("td");
-          cell.textContent = entry || "N/A";
-          row.append(cell);
+
+        document.querySelectorAll(".patient-nav a[data-category]").forEach((link) => {
+          link.addEventListener("click", () => {
+            showChecklistCategory(link.dataset.category);
+          });
+        });
+
+        function getSpeechErrorMessage(result) {
+          const providerMessages = {
+            400: "ElevenLabs could not process this request. Check the selected voice and speech model.",
+            401: "ElevenLabs rejected the API key. Check ELEVENLABS_API_KEY in the server's environment, then restart the server.",
+            402: "The ElevenLabs account needs an active plan or additional credits for text-to-speech.",
+            403: "The ElevenLabs API key does not have permission to use text-to-speech.",
+            404: "The configured ElevenLabs voice was not found. Check ELEVENLABS_VOICE_ID.",
+            422: "ElevenLabs could not use this text, voice, or model combination. Check the voice ID and model settings.",
+            429: "The ElevenLabs account has reached a rate or usage limit. Check your plan and try again later.",
+          };
+
+          if (providerMessages[result.providerStatus]) {
+            return `${providerMessages[result.providerStatus]} (Provider status: ${result.providerStatus})`;
+          }
+
+          return result.error || "Speech generation failed. Please try again.";
         }
-        rows.append(row);
-      }
-      medicationSection.hidden = false;
-    } else medicationSection.hidden = true;
-    document.querySelector("#expiry-note").textContent = `This link expires ${new Date(plan.expiresAt).toLocaleString()}.`;
-  }
-  void load();
-})();
-</script>
-</body></html>
+
+        function clearAudioUrl() {
+          if (audioUrl) {
+            URL.revokeObjectURL(audioUrl);
+            audioUrl = null;
+          }
+          audioPlayer.removeAttribute("src");
+          audioPlayer.hidden = true;
+          audioPlayer.load();
+        }
+
+        async function loadDischarge() {
+          const dischargeId = new URLSearchParams(window.location.search).get("id");
+          if (!dischargeId) {
+            setLoadStatus("This patient link is missing its discharge ID.", "error");
+            return;
+          }
+
+          try {
+            const response = await fetch(`/api/discharge/${encodeURIComponent(dischargeId)}`);
+            const result = await response.json();
+            if (!response.ok) {
+              throw new Error(result.error || "Discharge information could not be loaded.");
+            }
+
+            patientData.value = typeof result.transcript === "string" ? result.transcript : "";
+            if (result.checklist && typeof result.checklist === "object") {
+              categories.forEach(({ key }) => {
+                checklist[key] = Array.isArray(result.checklist[key])
+                  ? result.checklist[key].filter((item) => typeof item === "string")
+                  : [];
+              });
+            }
+            showChecklistCategory(activeCategory);
+
+            if (result.pdfUrl) {
+              pdfLink.href = result.pdfUrl;
+              pdfLink.download = result.pdfOriginalName || "discharge.pdf";
+              pdfLink.textContent = `View or download ${result.pdfOriginalName || "discharge PDF"}`;
+              pdfLink.hidden = false;
+            }
+            setLoadStatus("Your discharge information is ready.");
+            readButton.disabled = !patientData.value.trim();
+          } catch (error) {
+            setLoadStatus(error instanceof TypeError
+              ? "Could not connect to the discharge server. Check your connection and refresh this page."
+              : error.message || "Discharge information could not be loaded.", "error");
+          }
+        }
+
+        function stopReading() {
+          audioPlayer.pause();
+          audioPlayer.currentTime = 0;
+          stopButton.disabled = true;
+          readButton.disabled = !patientData.value.trim();
+        }
+
+        async function readTextAloud(text) {
+          text = text.trim();
+          if (!text) {
+            setStatus("There is no text to read aloud.", "error");
+            return;
+          }
+          clearAudioUrl();
+          readButton.disabled = true;
+          stopButton.disabled = true;
+          setStatus("Generating audio. Please wait.");
+
+          try {
+            const speechEndpoint = new URL("/api/speak", window.location.origin);
+            const response = await fetch(speechEndpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text }),
+            });
+
+            if (!response.ok) {
+              let result;
+              try {
+                result = await response.json();
+              } catch {
+                throw new Error("The server returned an invalid response.");
+              }
+              throw new Error(getSpeechErrorMessage(result));
+            }
+
+            const audio = await response.blob();
+            if (!audio.size) {
+              throw new Error("The speech service returned empty audio.");
+            }
+            audioUrl = URL.createObjectURL(audio);
+            audioPlayer.src = audioUrl;
+            audioPlayer.hidden = false;
+            try {
+              await audioPlayer.play();
+              setStatus("Playing generated audio.");
+            } catch {
+              readButton.disabled = !patientData.value.trim();
+              setStatus("Audio is ready. Press Play on the audio player to listen.");
+            }
+          } catch (error) {
+            setStatus(
+              error instanceof TypeError
+                ? "Could not reach the speech server. Open this page from the running application and try again."
+                : error.message || "Speech generation failed. Please try again.",
+              "error",
+            );
+            readButton.disabled = !patientData.value.trim();
+          }
+        }
+
+        patientData.addEventListener("input", () => {
+          readButton.disabled = !patientData.value.trim() || !audioPlayer.paused;
+        });
+
+        readButton.addEventListener("click", () => {
+          if (!patientData.value.trim()) {
+            setStatus("There is no care suggestion to read aloud.", "error");
+            patientData.focus();
+            return;
+          }
+          void readTextAloud(patientData.value);
+        });
+
+        stopButton.addEventListener("click", () => {
+          stopReading();
+          setStatus("Playback stopped.");
+        });
+
+        audioPlayer.addEventListener("play", () => {
+          readButton.disabled = true;
+          stopButton.disabled = false;
+          setStatus("Playing generated audio.");
+        });
+
+        audioPlayer.addEventListener("pause", () => {
+          if (!audioPlayer.ended) {
+            stopButton.disabled = true;
+            readButton.disabled = !patientData.value.trim();
+          }
+        });
+
+        audioPlayer.addEventListener("ended", () => {
+          stopButton.disabled = true;
+          readButton.disabled = !patientData.value.trim();
+          setStatus("Playback finished.");
+        });
+
+        window.addEventListener("pagehide", () => {
+          audioPlayer.pause();
+          clearAudioUrl();
+        });
+        void loadDischarge();
+      })();
+    </script>
+  </body>
+</html>

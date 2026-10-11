@@ -1,11 +1,24 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { createAppServer } from "./server.mjs";
+import { createAppServer, handler } from "./index.mjs";
 
 const runningServers = new Set();
+const sampleChecklist = {
+  medicine: ["Take medication with food."],
+  woundCare: [],
+  followUps: [],
+  additional: ["Drink plenty of fluids."],
+};
+
+function appendChecklist(form, checklist = sampleChecklist) {
+  form.append("checklist", JSON.stringify(checklist));
+}
 
 async function startServer(options) {
-  const server = createAppServer(options);
+  const server = createAppServer({
+    logger: { info() {}, error() {} },
+    ...options,
+  });
   runningServers.add(server);
   await new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -31,6 +44,20 @@ afterEach(async () => {
         }),
     ),
   );
+});
+
+test("exports an API Gateway-compatible Lambda handler", async () => {
+  const response = await handler({
+    httpMethod: "GET",
+    path: "/",
+    headers: { host: "example.com" },
+    requestContext: { stage: "test" },
+    isBase64Encoded: false,
+  }, {});
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.headers["content-type"], /text\/html/);
+  assert.match(response.body, /Add care instructions/);
 });
 
 test("transcribes audio through ElevenLabs without returning provider data", async () => {
@@ -124,14 +151,535 @@ test("serves the intake page from the root path", async () => {
   assert.match(page, /Add care instructions/);
   assert.match(page, /id="start-recording"/);
   assert.match(page, /\/api\/transcribe/);
+  assert.match(page, /id="generate-checklist"/);
+  assert.match(page, /id="checklist-review"/);
+  assert.match(page, /Confirm &amp; Create Patient Link/);
 });
 
 test("serves the patient view page with read-aloud controls", async () => {
   const { url } = await startServer();
-  const response = await fetch(`${url}/ptReadAloud.html`);
+  const response = await fetch(`${url}/ptView.html`);
 
   assert.equal(response.status, 200);
-  assert.match(await response.text(), /id="patient-data"/);
+  const page = await response.text();
+  assert.match(page, /class="patient-layout"/);
+  assert.match(page, /Recovery checklist/);
+  assert.match(page, /id="medicine-tab"/);
+  assert.match(page, /id="woundCare-tab"/);
+  assert.match(page, /id="followUps-tab"/);
+  assert.match(page, /id="additional-tab"/);
+  assert.doesNotMatch(page, /id="avs-transcript"/);
+  assert.doesNotMatch(page, /Select a sentence to hear it read aloud or view a simpler explanation\./);
+  assert.doesNotMatch(page, /Approved text is sent to ElevenLabs to generate audio\./);
+  assert.doesNotMatch(page, /id="speech-approval"/);
+  assert.match(page, /id="patient-data"/);
+  assert.match(page, /Play Out Loud/);
+  assert.match(page, /Stop reading/);
+  assert.match(page, /id="pdf-link"/);
+  assert.match(page, /class="button avs-document-link"/);
+  assert.match(page, /\/api\/discharge\//);
+  assert.match(page, /\/api\/speak/);
+});
+
+test("generates a flexible checklist from the transcript and extracted PDF text", async () => {
+  let invokeCommand;
+  const generatedChecklist = {
+    medicine: ["Take the pill each morning."],
+    woundCare: [],
+    followUps: ["Call the clinic next week."],
+    additional: [
+      "Drink water.",
+      "Walk each day.",
+      "Keep the paper.",
+      "Call if the clinic is closed.",
+      "Bring the list to your visit.",
+    ],
+  };
+  const { url } = await startServer({
+    bedrockModelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    pdfParser: async (buffer) => {
+      assert.equal(buffer.toString(), "%PDF test document");
+      return { text: "Call the clinic next week." };
+    },
+    bedrockClient: {
+      messages: {
+        create: async (params) => {
+          invokeCommand = params;
+          return {
+            content: [{
+              type: "tool_use",
+              name: "return_discharge_checklist",
+              input: generatedChecklist,
+            }],
+          };
+        },
+      },
+    },
+  });
+
+  const form = new FormData();
+  form.append("transcript", "Take the pill each morning.");
+  form.append("pdfFile", new Blob(["%PDF test document"], { type: "application/pdf" }), "aftercare.pdf");
+  const response = await fetch(`${url}/api/generate-checklist`, { method: "POST", body: form });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    checklist: generatedChecklist,
+    extractedDocText: "Call the clinic next week.",
+  });
+  assert.equal(invokeCommand.model, "anthropic.claude-3-5-sonnet-20241022-v2:0");
+  assert.equal(invokeCommand.max_tokens, 8192);
+  assert.deepEqual(invokeCommand.tool_choice, {
+    type: "tool",
+    name: "return_discharge_checklist",
+  });
+  assert.deepEqual(invokeCommand.tools[0].input_schema.required, [
+    "medicine",
+    "woundCare",
+    "followUps",
+    "additional",
+  ]);
+  assert.match(invokeCommand.system, /ONLY use facts and directives explicitly stated/);
+  assert.match(invokeCommand.messages[0].content, /Take the pill each morning/);
+  assert.match(invokeCommand.messages[0].content, /Call the clinic next week/);
+});
+
+test("accepts valid checklist JSON wrapped in Markdown and explanatory text", async () => {
+  const wrappedChecklist = `Here is the care plan:
+\`\`\`json
+{"medicine":[],"woundCare":["Keep the dressing clean."],"followUps":[],"additional":[]}
+\`\`\``;
+  const { url } = await startServer({
+    bedrockModelId: "anthropic.claude-haiku-4-5",
+    bedrockClient: {
+      messages: {
+        create: async () => ({
+          stop_reason: "end_turn",
+          content: [{ type: "text", text: wrappedChecklist }],
+        }),
+      },
+    },
+  });
+  const form = new FormData();
+  form.append("transcript", "Keep the dressing clean.");
+
+  const response = await fetch(`${url}/api/generate-checklist`, { method: "POST", body: form });
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).checklist, {
+    medicine: [],
+    woundCare: ["Keep the dressing clean."],
+    followUps: [],
+    additional: [],
+  });
+});
+
+test("rejects malformed Bedrock checklist output", async () => {
+  const { url } = await startServer({
+    awsRegion: "us-east-1",
+    bedrockModelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    bedrockClient: {
+      messages: {
+        create: async () => ({
+          stop_reason: "end_turn",
+          content: [{ type: "text", text: '{"medicine":[],"woundCare":[]}' }],
+        }),
+      },
+    },
+  });
+  const form = new FormData();
+  form.append("transcript", "Rest today.");
+
+  const response = await fetch(`${url}/api/generate-checklist`, { method: "POST", body: form });
+  assert.equal(response.status, 502);
+  const requestId = response.headers.get("x-request-id");
+  const result = await response.json();
+  assert.equal(result.error, "The care plan could not be generated. Please try again.");
+  assert.deepEqual(result.diagnostic, {
+    requestId,
+    stage: "checklist validation",
+    code: "InvalidChecklistResponse",
+    message: "Model response omitted checklist arrays: followUps, additional.",
+    contentBlockTypes: ["text"],
+    stopReason: "end_turn",
+    responseTextLength: '{"medicine":[],"woundCare":[]}'.length,
+    region: "us-east-1",
+    modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+  });
+});
+
+test("reports malformed checklist structure without exposing model output", async () => {
+  const privateOutput = "Patient-specific generated text must never be returned.";
+  const { url } = await startServer({
+    bedrockModelId: "anthropic.claude-haiku-4-5",
+    bedrockClient: {
+      messages: {
+        create: async () => ({
+          stop_reason: "max_tokens",
+          content: [{ type: "text", text: privateOutput }],
+        }),
+      },
+    },
+  });
+  const form = new FormData();
+  form.append("transcript", "Source instructions.");
+
+  const response = await fetch(`${url}/api/generate-checklist`, { method: "POST", body: form });
+  assert.equal(response.status, 502);
+  const result = await response.json();
+  assert.equal(result.diagnostic.code, "InvalidChecklistResponse");
+  assert.match(result.diagnostic.message, /did not contain a JSON object/);
+  assert.equal(result.diagnostic.stopReason, "max_tokens");
+  assert.equal(result.diagnostic.responseTextLength, privateOutput.length);
+  assert.doesNotMatch(JSON.stringify(result), /Patient-specific generated text/);
+});
+
+test("returns safe Bedrock error details and supports configuring an inference profile", async () => {
+  let requestedModelId;
+  const logEntries = [];
+  const { url } = await startServer({
+    awsRegion: "us-west-2",
+    bedrockModelId: "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+    logger: {
+      info: (message) => logEntries.push(JSON.parse(message)),
+      error: (...details) => logEntries.push({ event: "error", details }),
+    },
+    bedrockClient: {
+      messages: {
+        create: async (params) => {
+          requestedModelId = params.model;
+          const error = new Error("Model access is denied for this account.");
+          error.name = "AccessDeniedException";
+          error.requestID = "bedrock-request-123";
+          error.status = 403;
+          error.type = "permission_error";
+          throw error;
+        },
+      },
+    },
+  });
+  const form = new FormData();
+  form.append("transcript", "Private transcript must not be in diagnostics.");
+
+  const response = await fetch(`${url}/api/generate-checklist`, { method: "POST", body: form });
+  assert.equal(response.status, 502);
+  const requestId = response.headers.get("x-request-id");
+  const result = await response.json();
+  assert.deepEqual(result, {
+    error: "The care plan could not be generated. Please try again.",
+    diagnostic: {
+      requestId,
+      stage: "Bedrock invocation",
+      code: "AccessDeniedException",
+      message: "Model access is denied for this account.",
+      region: "us-west-2",
+      modelId: "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+      providerRequestId: "bedrock-request-123",
+      providerStatus: 403,
+      providerErrorType: "permission_error",
+    },
+  });
+  assert.equal(requestedModelId, "us.anthropic.claude-3-5-sonnet-20241022-v2:0");
+  assert.doesNotMatch(JSON.stringify(result), /Private transcript/);
+  assert.deepEqual(logEntries.map(({ event }) => event), [
+    "http_request_started",
+    "error",
+    "http_request_completed",
+  ]);
+  assert.ok(logEntries.every((entry) => !JSON.stringify(entry).includes("Private transcript")));
+});
+
+test("keeps the fixed-prompt Bedrock diagnostic disabled unless explicitly enabled", async () => {
+  const { url } = await startServer({
+    bedrockClient: {
+      messages: {
+        create: async () => assert.fail("Disabled diagnostic must not call Bedrock."),
+      },
+    },
+  });
+
+  const response = await fetch(`${url}/api/bedrock-diagnostic`, { method: "POST" });
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { error: "Not found." });
+});
+
+test("reports missing Mantle model configuration without calling the model", async () => {
+  const { url } = await startServer({
+    bedrockModelId: "",
+    bedrockDiagnosticsEnabled: true,
+    bedrockClient: {
+      messages: {
+        create: async () => assert.fail("Missing model ID must not call Bedrock Mantle."),
+      },
+    },
+  });
+
+  const response = await fetch(`${url}/api/bedrock-diagnostic`, { method: "POST" });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: "Bedrock is not configured: set BEDROCK_MODEL_ID on the server.",
+  });
+});
+
+test("smoke-tests the configured Bedrock model without patient data", async () => {
+  let commandInput;
+  const { url } = await startServer({
+    awsRegion: "us-west-2",
+    bedrockModelId: "us.anthropic.claude-sonnet-4-6",
+    bedrockDiagnosticsEnabled: true,
+    bedrockClient: {
+      messages: {
+        create: async (params) => {
+          commandInput = params;
+          return {
+            _request_id: "bedrock-smoke-test-id",
+            content: [{ type: "text", text: "OK" }],
+          };
+        },
+      },
+    },
+  });
+
+  const response = await fetch(`${url}/api/bedrock-diagnostic`, { method: "POST" });
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.deepEqual(result, {
+    ok: true,
+    requestId: response.headers.get("x-request-id"),
+    region: "us-west-2",
+    modelId: "us.anthropic.claude-sonnet-4-6",
+    providerRequestId: "bedrock-smoke-test-id",
+  });
+  assert.equal(commandInput.model, "us.anthropic.claude-sonnet-4-6");
+  assert.equal(commandInput.max_tokens, 16);
+  assert.deepEqual(commandInput.messages, [{
+    role: "user",
+    content: "Reply with exactly the word OK.",
+  }]);
+});
+
+test("uploads discharge PDF and persists the matching 30-day DynamoDB record", async () => {
+  const calls = [];
+  const fixedNow = Date.parse("2026-10-10T12:00:00.000Z");
+  const { url } = await startServer({
+    tableName: "Discharges",
+    bucketName: "discharge-pdfs",
+    idGenerator: () => "test-discharge-id",
+    now: () => fixedNow,
+    s3Client: {
+      send: async (command) => calls.push({ service: "s3", command }),
+    },
+    dynamoClient: {
+      send: async (command) => calls.push({ service: "dynamodb", command }),
+    },
+  });
+
+  const form = new FormData();
+  form.append("transcript", "  Take medication with food.  ");
+  appendChecklist(form);
+  form.append("pdfFile", new Blob(["%PDF test document"], { type: "application/pdf" }), "aftercare.pdf");
+  const response = await fetch(`${url}/api/discharge`, { method: "POST", body: form });
+
+  assert.equal(response.status, 201);
+  assert.deepEqual(await response.json(), {
+    dischargeId: "test-discharge-id",
+    patientLink: "/ptView.html?id=test-discharge-id",
+  });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].service, "s3");
+  assert.equal(calls[0].command.input.Bucket, "discharge-pdfs");
+  assert.equal(calls[0].command.input.Key, "discharges/test-discharge-id/aftercare.pdf");
+  assert.equal(calls[0].command.input.ContentType, "application/pdf");
+  assert.equal(calls[0].command.input.Body.toString(), "%PDF test document");
+  assert.equal(calls[1].service, "dynamodb");
+  assert.deepEqual(calls[1].command.input, {
+    TableName: "Discharges",
+    Item: {
+      dischargeId: "test-discharge-id",
+      createdAt: "2026-10-10T12:00:00.000Z",
+      expiresAt: Math.floor(fixedNow / 1000) + 30 * 24 * 60 * 60,
+      transcript: "Take medication with food.",
+      checklist: sampleChecklist,
+      pdfKey: "discharges/test-discharge-id/aftercare.pdf",
+      pdfOriginalName: "aftercare.pdf",
+    },
+  });
+});
+
+test("saves a transcript and generates a patient link without requiring a PDF or S3", async () => {
+  let saveCommand;
+  const { url } = await startServer({
+    tableName: "Discharges",
+    idGenerator: () => "transcript-only-id",
+    dynamoClient: {
+      send: async (command) => {
+        saveCommand = command;
+      },
+    },
+    s3Client: { send: async () => assert.fail("Transcript-only submissions must not access S3.") },
+  });
+  const form = new FormData();
+  form.append("transcript", "Drink plenty of fluids.");
+  appendChecklist(form);
+
+  const response = await fetch(`${url}/api/discharge`, { method: "POST", body: form });
+  assert.equal(response.status, 201);
+  assert.deepEqual(await response.json(), {
+    dischargeId: "transcript-only-id",
+    patientLink: "/ptView.html?id=transcript-only-id",
+  });
+  assert.equal(saveCommand.input.TableName, "Discharges");
+  assert.equal(saveCommand.input.Item.transcript, "Drink plenty of fluids.");
+  assert.deepEqual(saveCommand.input.Item.checklist, sampleChecklist);
+  assert.equal("pdfKey" in saveCommand.input.Item, false);
+});
+
+test("fetches a discharge record and signs its PDF download URL", async () => {
+  let readCommand;
+  let signingCommand;
+  let signingOptions;
+  const { url } = await startServer({
+    tableName: "Discharges",
+    bucketName: "discharge-pdfs",
+    now: () => Date.parse("2026-10-10T12:00:00.000Z"),
+    dynamoClient: {
+      send: async (command) => {
+        readCommand = command;
+        return {
+          Item: {
+            dischargeId: "patient-123",
+            expiresAt: Math.floor(Date.parse("2026-10-10T12:00:00.000Z") / 1000) + 10,
+            transcript: "Rest and drink water.",
+            pdfKey: "discharges/patient-123/aftercare.pdf",
+            pdfOriginalName: "aftercare.pdf",
+          },
+        };
+      },
+    },
+    s3Client: { send: async () => assert.fail("GET should use a signed URL, not fetch the PDF.") },
+    getSignedUrlImpl: async (client, command, options) => {
+      assert.ok(client);
+      signingCommand = command;
+      signingOptions = options;
+      return "https://signed.example/download";
+    },
+  });
+
+  const response = await fetch(`${url}/api/discharge/patient-123`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    dischargeId: "patient-123",
+    transcript: "Rest and drink water.",
+    checklist: { medicine: [], woundCare: [], followUps: [], additional: [] },
+    pdfUrl: "https://signed.example/download",
+    pdfOriginalName: "aftercare.pdf",
+  });
+  assert.deepEqual(readCommand.input, {
+    TableName: "Discharges",
+    Key: { dischargeId: "patient-123" },
+  });
+  assert.deepEqual(signingCommand.input, {
+    Bucket: "discharge-pdfs",
+    Key: "discharges/patient-123/aftercare.pdf",
+  });
+  assert.deepEqual(signingOptions, { expiresIn: 3600 });
+});
+
+test("loads a transcript-only discharge without requiring S3", async () => {
+  const { url } = await startServer({
+    tableName: "Discharges",
+    dynamoClient: {
+      send: async () => ({
+        Item: {
+          dischargeId: "transcript-only-id",
+          expiresAt: Math.floor(Date.now() / 1000) + 60,
+          transcript: "Drink plenty of fluids.",
+        },
+      }),
+    },
+    s3Client: { send: async () => assert.fail("Transcript-only records must not access S3.") },
+    getSignedUrlImpl: async () => assert.fail("Transcript-only records must not be signed."),
+  });
+
+  const response = await fetch(`${url}/api/discharge/transcript-only-id`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    dischargeId: "transcript-only-id",
+    transcript: "Drink plenty of fluids.",
+    checklist: { medicine: [], woundCare: [], followUps: [], additional: [] },
+  });
+});
+
+test("does not serve missing or expired discharge records", async () => {
+  const fixedNow = Date.parse("2026-10-10T12:00:00.000Z");
+  let item;
+  const { url } = await startServer({
+    tableName: "Discharges",
+    bucketName: "discharge-pdfs",
+    now: () => fixedNow,
+    dynamoClient: { send: async () => ({ Item: item }) },
+    s3Client: { send: async () => assert.fail("Expired or missing record must not access S3.") },
+    getSignedUrlImpl: async () => assert.fail("Expired or missing record must not be signed."),
+  });
+
+  const missing = await fetch(`${url}/api/discharge/missing`);
+  assert.equal(missing.status, 404);
+  item = { dischargeId: "expired", expiresAt: Math.floor(fixedNow / 1000) - 1 };
+  const expired = await fetch(`${url}/api/discharge/expired`);
+  assert.equal(expired.status, 404);
+});
+
+test("rejects discharge submissions with an empty transcript", async () => {
+  const { url } = await startServer({
+    tableName: "Discharges",
+    bucketName: "discharge-pdfs",
+    s3Client: { send: async () => assert.fail("Invalid submission must not upload.") },
+    dynamoClient: { send: async () => assert.fail("Invalid submission must not persist.") },
+  });
+  const form = new FormData();
+  form.append("transcript", " ");
+  appendChecklist(form);
+  form.append("pdfFile", new Blob(["%PDF"], { type: "application/pdf" }), "missing.pdf");
+
+  const response = await fetch(`${url}/api/discharge`, { method: "POST", body: form });
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "Provide a non-empty discharge transcript." });
+
+});
+
+test("reports missing DynamoDB configuration when creating or loading patient links", async () => {
+  const { url } = await startServer({ tableName: "" });
+  const form = new FormData();
+  form.append("transcript", "Take medication with food.");
+  appendChecklist(form);
+  const submitResponse = await fetch(`${url}/api/discharge`, { method: "POST", body: form });
+  assert.equal(submitResponse.status, 503);
+  assert.deepEqual(await submitResponse.json(), {
+    error: "Discharge storage is not configured: set DYNAMODB_TABLE_NAME on the server.",
+  });
+
+  const response = await fetch(`${url}/api/discharge/unknown`);
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: "Discharge storage is not configured: set DYNAMODB_TABLE_NAME on the server.",
+  });
+});
+
+test("reports missing S3 configuration only when a PDF is attached", async () => {
+  const { url } = await startServer({
+    tableName: "Discharges",
+    bucketName: "",
+  });
+  const form = new FormData();
+  form.append("transcript", "Take medication with food.");
+  appendChecklist(form);
+  form.append("pdfFile", new Blob(["%PDF"], { type: "application/pdf" }), "instructions.pdf");
+
+  const response = await fetch(`${url}/api/discharge`, { method: "POST", body: form });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: "PDF storage is not configured: set S3_BUCKET_NAME on the server.",
+  });
 });
 
 test("generates speech through ElevenLabs and returns audio", async () => {
@@ -225,352 +773,4 @@ test("does not return provider error details to the caller", async () => {
     error: "The speech transcription service rejected the audio.",
     providerStatus: 401,
   });
-});
-
-const sandbox = 'https://sandbox.example/fhir';
-const patient = { resourceType: 'Patient', id: 'patient-1', name: [{ given: ['Andy'], family: 'Gusikowski' }], birthDate: '2018-06-07' };
-const bundle = (patients = [], link = []) => ({ resourceType: 'Bundle', type: 'searchset', entry: patients.map(resource => ({ resource })), link });
-
-test('FHIR name search returns patient summaries and server identity', async () => {
-  const { url } = await startServer({ fhirBaseUrl: sandbox, fhirFetchImpl: async (target, options) => {
-    const upstream = new URL(target);
-    assert.equal(upstream.pathname, '/fhir/Patient');
-    assert.equal(upstream.searchParams.get('name'), 'Andy');
-    assert.equal(options.headers.Accept, 'application/fhir+json');
-    assert.equal(options.redirect, 'error');
-    return Response.json(bundle([patient]));
-  }});
-  const response = await fetch(`${url}/api/patients?name=Andy`);
-  assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { server: sandbox, patients: [{ id: 'patient-1', name: 'Andy Gusikowski', birthDate: '2018-06-07' }], nextCursor: null });
-});
-
-test('FHIR full-name search uses given and family; missing demographics are handled', async () => {
-  const { url } = await startServer({ fhirBaseUrl: sandbox, fhirFetchImpl: async target => {
-    const params = new URL(target).searchParams;
-    assert.deepEqual(params.getAll('given'), ['Andy', 'James']);
-    assert.equal(params.get('family'), 'Gusikowski');
-    return Response.json(bundle([{ resourceType: 'Patient', id: 'minimal' }]));
-  }});
-  const result = await (await fetch(`${url}/api/patients?name=Andy%20James%20Gusikowski`)).json();
-  assert.deepEqual(result.patients, [{ id: 'minimal', name: 'Name unavailable', birthDate: null }]);
-});
-
-test('FHIR empty results are successful', async () => {
-  const { url } = await startServer({ fhirFetchImpl: async () => Response.json(bundle()) });
-  const response = await fetch(`${url}/api/patients?name=Nobody`);
-  assert.equal(response.status, 200);
-  assert.deepEqual((await response.json()).patients, []);
-});
-
-test('FHIR upstream failures and invalid JSON produce readable errors without leaking details', async () => {
-  for (const provider of [async () => new Response('secret', { status: 500 }), async () => new Response('invalid json'), async () => { throw new Error('secret'); }]) {
-    const { url } = await startServer({ fhirFetchImpl: provider });
-    const response = await fetch(`${url}/api/patients?name=Andy`);
-    assert.equal(response.status, 502);
-    assert.doesNotMatch(JSON.stringify(await response.json()), /secret/);
-  }
-});
-
-test('FHIR patient retrieval supports selection and validates returned identity', async () => {
-  const { url } = await startServer({ fhirBaseUrl: sandbox, fhirFetchImpl: async target => {
-    assert.equal(target, `${sandbox}/Patient/patient-1`);
-    return Response.json(patient);
-  }});
-  const response = await fetch(`${url}/api/patients/patient-1`);
-  assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { server: sandbox, patient: { id: 'patient-1', name: 'Andy Gusikowski', birthDate: '2018-06-07' } });
-  const other = await startServer({ fhirFetchImpl: async () => Response.json({ ...patient, id: 'wrong' }) });
-  assert.equal((await fetch(`${other.url}/api/patients/patient-1`)).status, 502);
-});
-
-test('FHIR validates search, ID, cursor, and arbitrary upstream parameters before contacting sandbox', async () => {
-  const { url } = await startServer({ fhirFetchImpl: async () => assert.fail('Must not call upstream') });
-  for (const path of ['/api/patients', '/api/patients?name=%20', `/api/patients?name=${'x'.repeat(101)}`, '/api/patients?name=a%00', '/api/patients?cursor=https://evil.example', '/api/patients?name=a&cursor=x', '/api/patients?name=a&baseUrl=https://evil.example', '/api/patients?name=a&name=b', '/api/patients/bad%2Fid', '/api/patients/id?url=https://evil.example']) {
-    assert.equal((await fetch(`${url}${path}`)).status, 400, path);
-  }
-  assert.equal((await fetch(`${url}/api/patients?name=Andy`, { method: 'POST' })).status, 405);
-});
-
-test('FHIR pagination uses opaque cursors bound to the configured server', async () => {
-  let calls = 0;
-  const { url } = await startServer({ fhirBaseUrl: sandbox, fhirFetchImpl: async target => {
-    calls++;
-    if (calls === 1) return Response.json(bundle([patient], [{ relation: 'next', url: `${sandbox}?_getpages=abc&_getpagesoffset=10` }]));
-    assert.equal(target, `${sandbox}?_getpages=abc&_getpagesoffset=10`);
-    return Response.json(bundle([{ ...patient, id: 'patient-2' }]));
-  }});
-  const first = await (await fetch(`${url}/api/patients?name=Andy`)).json();
-  assert.ok(first.nextCursor);
-  assert.doesNotMatch(first.nextCursor, /https/);
-  const second = await (await fetch(`${url}/api/patients?cursor=${first.nextCursor}`)).json();
-  assert.equal(second.patients[0].id, 'patient-2');
-  assert.equal(second.nextCursor, null);
-});
-
-test('FHIR rejects foreign-origin and outside-base pagination links', async () => {
-  for (const next of ['https://evil.example/fhir/Patient', 'https://sandbox.example/other', 'https://sandbox.example/fhir-evil']) {
-    const { url } = await startServer({ fhirBaseUrl: sandbox, fhirFetchImpl: async () => Response.json(bundle([patient], [{ relation: 'next', url: next }])) });
-    assert.equal((await fetch(`${url}/api/patients?name=Andy`)).status, 502);
-  }
-});
-
-test('FHIR request timeouts are reported', async () => {
-  const { url } = await startServer({ fhirTimeoutMs: 10, fhirFetchImpl: async (_target, { signal }) => new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true })) });
-  const response = await fetch(`${url}/api/patients?name=Andy`);
-  assert.equal(response.status, 502);
-  assert.match((await response.json()).error, /timed out/);
-});
-
-import { createPatientContext } from './patient-state.mjs';
-test('patient selection stores server and ID and requires confirmation before discarding an unassigned draft', () => {
-  const context = createPatientContext();
-  let cleared = 0;
-  const selection = { server: sandbox, patient: { id: 'patient-1', name: 'Andy' } };
-  assert.equal(context.selected, null);
-  assert.equal(context.select(selection, { hasDraft: true, confirmDiscard: () => false, clearDraft: () => cleared++ }), false);
-  assert.equal(context.selected, null);
-  assert.equal(cleared, 0);
-  assert.equal(context.select(selection, { hasDraft: true, confirmDiscard: () => true, clearDraft: () => cleared++ }), true);
-  assert.equal(context.selected.patient.id, 'patient-1');
-  assert.equal(context.selected.server, sandbox);
-  assert.equal(cleared, 1);
-});
-
-test('changing patients or FHIR server cannot silently transfer instructions or PDFs', () => {
-  const context = createPatientContext();
-  const first = { server: sandbox, patient: { id: 'patient-1' } };
-  context.select(first);
-  let cleared = 0;
-  const refuse = { hasDraft: true, confirmDiscard: () => false, clearDraft: () => cleared++ };
-  assert.equal(context.select({ server: sandbox, patient: { id: 'patient-2' } }, refuse), false);
-  assert.equal(context.clear(refuse), false);
-  assert.equal(context.selected.patient.id, 'patient-1');
-  assert.equal(context.select({ ...first, server: 'https://other.example' }, refuse), false);
-  assert.equal(cleared, 0);
-  assert.equal(context.select(first, refuse), true); // Same patient keeps its draft.
-  assert.equal(context.clear({ ...refuse, confirmDiscard: () => true }), true);
-  assert.equal(cleared, 1);
-  assert.equal(context.selected, null);
-});
-
-const medStatement = overrides => ({ resourceType: 'MedicationStatement', id: 'statement-1', subject: { reference: 'Patient/patient-1' }, status: 'stopped', medicationReference: { reference: 'Medication/med-1' }, effectivePeriod: { start: '2020-01-01', end: '2021-01-01' }, dosage: [{ text: 'Take two tablets twice daily as needed.', doseAndRate: [{ doseQuantity: { value: 2, unit: 'tablets' } }], timing: { repeat: { frequency: 2, period: 1, periodUnit: 'd' } }, asNeededBoolean: true }, { text: 'Then reduce to one tablet.', doseAndRate: [{ doseQuantity: { value: 1, unit: 'tablet' } }] }], ...overrides });
-const medResource = { resourceType: 'Medication', id: 'med-1', code: { text: 'Example medicine' }, ingredient: [{ strength: { numerator: { value: 5, unit: 'mg' }, denominator: { value: 1, unit: 'tablet' } } }] };
-
-test('MedicationStatement retrieval follows all pages, resolves and caches medication references, and preserves multiple dosages', async () => {
-  let medCalls = 0;
-  const { url } = await startServer({ fhirBaseUrl: sandbox, fhirFetchImpl: async target => {
-    const upstream = new URL(target);
-    if (upstream.pathname === '/fhir/Medication/med-1') { medCalls++; return Response.json(medResource); }
-    if (upstream.searchParams.has('_getpages')) return Response.json(bundle([medStatement({ id: 'statement-2', status: 'active' })]));
-    assert.equal(upstream.pathname, '/fhir/MedicationStatement');
-    assert.equal(upstream.searchParams.get('patient'), 'patient-1');
-    assert.equal(upstream.searchParams.has('status'), false);
-    return Response.json(bundle([medStatement()], [{ relation: 'next', url: `${sandbox}?_getpages=medications` }]));
-  }});
-  const response = await fetch(`${url}/api/patients/patient-1/medication-statements`);
-  assert.equal(response.status, 200);
-  const result = await response.json();
-  assert.equal(result.patientId, 'patient-1');
-  assert.equal(result.server, sandbox);
-  assert.equal(result.statements.length, 2);
-  const first = result.statements[0];
-  assert.equal(first.name, 'Example medicine');
-  assert.equal(first.strength, '5 mg / 1 tablet');
-  assert.equal(first.status, 'stopped');
-  assert.equal(first.effective, '2020-01-01 — 2021-01-01');
-  assert.equal(first.dosages.length, 2);
-  assert.equal(first.dosages[0].dose, '2 tablets');
-  assert.equal(first.dosages[0].asNeeded, 'Yes');
-  assert.match(first.dosages[0].timing, /2 times every 1 day/);
-  assert.equal(first.dosages[1].text, 'Then reduce to one tablet.');
-  assert.deepEqual(first.dosages[0].raw, medStatement().dosage[0]);
-  assert.equal(medCalls, 1);
-});
-
-test('contained and bundle-included Medication resources resolve without extra requests; missing fields remain undocumented', async () => {
-  let calls = 0;
-  const { url } = await startServer({ fhirBaseUrl: sandbox, fhirFetchImpl: async () => {
-    calls++;
-    return Response.json(bundle([
-      medStatement({ id: 'contained', medicationReference: { reference: '#local' }, contained: [{ ...medResource, id: 'local' }] }),
-      medStatement({ id: 'included' }), medResource,
-      medStatement({ id: 'minimal', medicationReference: undefined, medicationCodeableConcept: { text: 'Drug name with 20 mg in display' }, dosage: undefined, effectivePeriod: undefined }),
-    ]));
-  }});
-  const { statements } = await (await fetch(`${url}/api/patients/patient-1/medication-statements`)).json();
-  assert.equal(calls, 1);
-  assert.equal(statements.length, 3);
-  assert.equal(statements[0].strength, '5 mg / 1 tablet');
-  assert.equal(statements[1].name, 'Example medicine');
-  assert.equal(statements[2].strength, 'Not documented'); // Don't infer from dose or display text.
-  assert.equal(statements[2].dosages[0].dose, 'Not documented');
-  assert.equal(statements[2].dosages[0].timing, 'Not documented');
-  assert.equal(statements[2].effective, 'Not documented');
-});
-
-test('missing medication references retain available statement details with a warning', async () => {
-  const { url } = await startServer({ fhirBaseUrl: sandbox, fhirFetchImpl: async target => target.includes('/Medication/') ? new Response('', { status: 404 }) : Response.json(bundle([medStatement({ medicationReference: { reference: 'Medication/med-1', display: 'Known name' } })])) });
-  const response = await fetch(`${url}/api/patients/patient-1/medication-statements`);
-  assert.equal(response.status, 200);
-  const statement = (await response.json()).statements[0];
-  assert.equal(statement.name, 'Known name');
-  assert.equal(statement.strength, 'Not documented');
-  assert.match(statement.warning, /not found/);
-});
-
-test('medication queries handle empty results, upstream failures, and invalid IDs', async () => {
-  const empty = await startServer({ fhirFetchImpl: async () => Response.json(bundle()) });
-  assert.deepEqual((await (await fetch(`${empty.url}/api/patients/patient-1/medication-statements`)).json()).statements, []);
-  const failure = await startServer({ fhirFetchImpl: async () => new Response('private upstream error', { status: 500 }) });
-  const response = await fetch(`${failure.url}/api/patients/patient-1/medication-statements`);
-  assert.equal(response.status, 502);
-  assert.doesNotMatch(JSON.stringify(await response.json()), /private/);
-  const invalid = await startServer({ fhirFetchImpl: async () => assert.fail('No upstream request') });
-  assert.equal((await fetch(`${invalid.url}/api/patients/bad%2Fid/medication-statements`)).status, 400);
-});
-
-test('medication resolution rejects foreign references and records from another patient', async () => {
-  for (const override of [{ medicationReference: { reference: 'https://evil.example/Medication/med-1' } }, { medicationReference: { reference: `${sandbox}/Patient/med-1` } }, { subject: { reference: 'Patient/other' } }]) {
-    let calls = 0;
-    const { url } = await startServer({ fhirBaseUrl: sandbox, fhirFetchImpl: async () => { calls++; return Response.json(bundle([medStatement(override)])); } });
-    assert.equal((await fetch(`${url}/api/patients/patient-1/medication-statements`)).status, 502);
-    assert.equal(calls, 1);
-  }
-});
-
-test('medication pagination rejects unsafe or repeating links rather than returning an incomplete list', async () => {
-  for (const next of ['https://evil.example/fhir', `${sandbox}/MedicationStatement?patient=patient-1&_count=50`]) {
-    const { url } = await startServer({ fhirBaseUrl: sandbox, fhirFetchImpl: async () => Response.json(bundle([medStatement()], [{ relation: 'next', url: next }])) });
-    assert.equal((await fetch(`${url}/api/patients/patient-1/medication-statements`)).status, 502);
-  }
-});
-
-import { createMedicationLoader } from './patient-state.mjs';
-test('medication loader caches successful expansions and ignores delayed results after patient changes', async () => {
-  let resolveOld;
-  const updates = [];
-  let calls = 0;
-  const context = { server: sandbox, patient: { id: 'patient-1' } };
-  const loader = createMedicationLoader(async id => {
-    calls++;
-    if (id === 'patient-1') return new Promise(resolve => { resolveOld = resolve; });
-    return { server: sandbox, patientId: id, statements: [] };
-  }, value => updates.push(value));
-  const old = loader.load(context);
-  loader.reset();
-  const current = { server: sandbox, patient: { id: 'patient-2' } };
-  await loader.load(current);
-  resolveOld({ server: sandbox, patientId: 'patient-1', statements: [{ name: 'Wrong patient drug' }] });
-  await old;
-  assert.equal(updates.at(-1).result.patientId, 'patient-2');
-  assert.equal(updates.some(u => u.result?.patientId === 'patient-1'), false);
-  await loader.load(current);
-  assert.equal(calls, 2);
-});
-
-test('medication loader supports retry after errors and rejects mismatched patient identity', async () => {
-  let calls = 0;
-  const updates = [];
-  const loader = createMedicationLoader(async () => {
-    calls++;
-    if (calls === 1) throw new Error('Sandbox unavailable');
-    if (calls === 2) return { server: sandbox, patientId: 'wrong', statements: [] };
-    return { server: sandbox, patientId: 'patient-1', statements: [] };
-  }, value => updates.push(value));
-  const context = { server: sandbox, patient: { id: 'patient-1' } };
-  await loader.load(context);
-  assert.equal(updates.at(-1).state, 'error');
-  await loader.load(context);
-  assert.equal(updates.at(-1).state, 'error');
-  await loader.load(context);
-  assert.equal(updates.at(-1).state, 'loaded');
-});
-
-test('prescription records keep source identity, use dosageInstruction, and expose literal coded product strength', async () => {
-  const { url } = await startServer({ fhirBaseUrl: sandbox, fhirFetchImpl: async target => {
-    const upstream = new URL(target);
-    assert.equal(upstream.pathname, '/fhir/MedicationRequest');
-    assert.equal(upstream.searchParams.get('patient'), 'patient-1');
-    return Response.json(bundle([{ resourceType: 'MedicationRequest', id: 'request-1', subject: { reference: 'Patient/patient-1' }, status: 'active', authoredOn: '2020-01-01', medicationCodeableConcept: { coding: [{ code: '316049', display: 'Hydrochlorothiazide 25 MG' }], text: 'Hydrochlorothiazide 25 MG' }, dosageInstruction: [{ text: 'One tablet daily', doseAndRate: [{ doseQuantity: { value: 1, unit: 'tablet' } }], timing: { repeat: { frequency: 1, period: 1, periodUnit: 'd' } } }] }]));
-  }});
-  const response = await fetch(`${url}/api/patients/patient-1/medication-requests`);
-  assert.equal(response.status, 200);
-  const record = (await response.json()).statements[0];
-  assert.equal(record.source, 'MedicationRequest');
-  assert.equal(record.name, 'Hydrochlorothiazide 25 MG');
-  assert.equal(record.labelStrength, '25 MG');
-  assert.equal(record.strength, 'Not documented');
-  assert.equal(record.dosages[0].dose, '1 tablet');
-  assert.equal(record.recordedOn, '2020-01-01');
-});
-
-test('incomplete sandbox statements preserve notes and assertion dates without inventing drug details', async () => {
-  const { url } = await startServer({ fhirBaseUrl: sandbox, fhirFetchImpl: async () => Response.json(bundle([medStatement({ medicationReference: undefined, medicationCodeableConcept: { text: 'Medication' }, dosage: undefined, note: [{ text: 'Medication taken as prescribed' }], dateAsserted: '2025-09-15', effectivePeriod: undefined })])) });
-  const record = (await (await fetch(`${url}/api/patients/patient-1/medication-statements`)).json()).statements[0];
-  assert.equal(record.name, 'Medication');
-  assert.equal(record.notes, 'Medication taken as prescribed');
-  assert.equal(record.recordedOn, '2025-09-15');
-  assert.equal(record.effective, 'Not documented');
-  assert.equal(record.labelStrength, null);
-  assert.equal(record.dosages[0].dose, 'Not documented');
-});
-
-test("creates and updates a patient checklist through the API", async () => {
-  const { url } = await startServer();
-  const created = await fetch(`${url}/api/checklists`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ items: ["Walk with help"], email: "demo@example.com", consent: true }),
-  });
-  assert.equal(created.status, 201);
-  const plan = await created.json();
-  assert.equal(plan.items[0].text, "Walk with help");
-  assert.equal(plan.delivery[0].status, "demo only");
-  const patient = await fetch(`${url}/patient/${plan.id}`);
-  assert.equal(patient.status, 200);
-  assert.match(await patient.text(), /Care checklist/);
-  const updated = await fetch(`${url}/api/checklists/${plan.id}/items`, {
-    method: "PATCH", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ index: 0, done: true }),
-  });
-  assert.equal(updated.status, 200);
-  assert.equal((await updated.json()).items[0].done, true);
-});
-
-test("serves the merged patient, PDF, checklist and audio intake workflow", async () => {
-  const { url } = await startServer();
-  const response = await fetch(url);
-
-  assert.equal(response.status, 200);
-  const page = await response.text();
-  assert.match(page, /Upload a PDF/);
-  assert.match(page, /Paste from the EMR/);
-  assert.match(page, /Find patient/);
-  assert.match(page, /Create a patient checklist/);
-  assert.match(page, /Record audio/);
-});
-
-test("extracts PDF text through the local server", async () => {
-  const { url } = await startServer();
-  const stream = "BT /F1 12 Tf 72 720 Td (Discharge Instructions) Tj ET";
-  const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
-  ];
-  let source = "%PDF-1.4\n";
-  const offsets = [0];
-  objects.forEach((object, index) => { offsets.push(source.length); source += `${index + 1} 0 obj\n${object}\nendobj\n`; });
-  const xref = source.length;
-  source += `xref\n0 6\n0000000000 65535 f \n${offsets.slice(1).map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`).join("")}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
-  const pdf = Buffer.from(source);
-  const response = await fetch(`${url}/api/extract-pdf`, {
-    method: "POST", headers: { "Content-Type": "application/pdf" }, body: pdf,
-  });
-  assert.equal(response.status, 200);
-  const result = await response.json();
-  assert.equal(result.pages, 1);
-  assert.match(result.text, /Discharge Instructions/);
 });
