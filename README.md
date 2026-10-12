@@ -106,3 +106,7 @@ Use “Review or edit medication groups” to review/revise the provisional base
 Integrated selectively from `origin/liza_translate_merge`; existing FHIR, checklist generation, storage, and medication comparison stay intact. Restart with `PORT=3121 npm start`, open a saved patient link, choose a language, and select Translate page. Show original restores English. Checklist tab changes translate the new content without replacing controls or losing checks. Read-aloud uses the translated care text; the PDF itself and patient-entered questions are unchanged.
 
 Uses AWS Translate in `AWS_REGION` with the same AWS credential chain. The local identity and deployed Lambda role need `translate:ListLanguages` and `translate:TranslateDocument`. No translation API key is required. Requests translate English to a supported language, send only text markers (no scripts, styles, URLs, or question input), enforce the 100 KB synchronous document limit, and time out after 15 seconds. Languages and repeated page snapshots are cached. Translations are display-only; saved plans retain their original wording. Paid live calls were not used in integration testing.
+
+## Contributions
+
+- [Dina Dank (@dankEYE)](https://github.com/dankEYE): FHIR patient search and medication integration, medication comparison, patient-facing UI and readability improvements, translation integration, and follow-up question features.
